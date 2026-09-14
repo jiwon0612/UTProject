@@ -31,8 +31,7 @@ namespace
 
 	bool IsWithinAttackRange(const AEnemyCharacter* Enemy, const AActor* Target)
 	{
-		return IsValid(Enemy) && IsValid(Target)
-			&& FVector::DistSquared2D(Enemy->GetActorLocation(), Target->GetActorLocation()) <= FMath::Square(Enemy->AttackRange);
+		return IsValid(Enemy) && Enemy->IsTargetInAttackRange(Target);
 	}
 }
 
@@ -128,6 +127,7 @@ EBTNodeResult::Type UEnemyBTTask_FindPatrolPoint::ExecuteTask(UBehaviorTreeCompo
 	}
 
 	FNavLocation PatrolPoint;
+	if (IsValid(GetTarget(OwnerComp))) return EBTNodeResult::Failed;
 	if (!Navigation->GetRandomReachablePointInRadius(Enemy->GetActorLocation(), Enemy->PatrolRadius, PatrolPoint))
 	{
 		return EBTNodeResult::Failed;
@@ -153,7 +153,6 @@ EBTNodeResult::Type UEnemyBTTask_WalkPatrol::ExecuteTask(UBehaviorTreeComponent&
 		return EBTNodeResult::Failed;
 	}
 
-	Enemy->GetCharacterMovement()->MaxWalkSpeed = Enemy->WalkSpeed;
 	Enemy->SetAIState(EEnemyAIState::Walk);
 	const FVector Destination = Blackboard->GetValueAsVector(AEnemyAIController::PatrolLocationKey);
 	const EPathFollowingRequestResult::Type Result = Controller->MoveToLocation(Destination, 45.0f, true);
@@ -214,9 +213,8 @@ EBTNodeResult::Type UEnemyBTTask_Chase::ExecuteTask(UBehaviorTreeComponent& Owne
 		return EBTNodeResult::Succeeded;
 	}
 
-	Enemy->GetCharacterMovement()->MaxWalkSpeed = Enemy->ChaseSpeed;
 	Enemy->SetAIState(EEnemyAIState::Chase);
-	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, Enemy->AttackRange * 0.85f, true);
+	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, 5.0f, false);
 	return Result == EPathFollowingRequestResult::Failed ? EBTNodeResult::Failed : EBTNodeResult::InProgress;
 }
 
@@ -268,7 +266,7 @@ EBTNodeResult::Type UEnemyBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& Own
 	}
 
 	Enemy->SetAIState(EEnemyAIState::Attack);
-	reinterpret_cast<FTimedTaskMemory*>(NodeMemory)->RemainingTime = Enemy->AttackCooldown;
+	reinterpret_cast<FTimedTaskMemory*>(NodeMemory)->RemainingTime = Enemy->GetAttackDuration();
 	return EBTNodeResult::InProgress;
 }
 

@@ -19,8 +19,6 @@ def create_enemy_blueprint():
         if unreal.EditorAssetLibrary.does_asset_exist(ENEMY_BLUEPRINT)
         else None
     )
-    if existing:
-        return existing
 
     parent_class = require(
         unreal.load_class(None, "/Script/UT1.EnemyCharacter"),
@@ -28,7 +26,7 @@ def create_enemy_blueprint():
     )
     factory = unreal.BlueprintFactory()
     factory.set_editor_property("parent_class", parent_class)
-    blueprint = require(
+    blueprint = existing or require(
         unreal.AssetToolsHelpers.get_asset_tools().create_asset(
             "BP_Enemy", CONTENT_ROOT, unreal.Blueprint, factory
         ),
@@ -48,7 +46,7 @@ def create_enemy_blueprint():
         unreal.Vector(0.0, 0.0, -90.0), False, False
     )
     mesh_component.set_relative_rotation(
-        unreal.Rotator(0.0, -90.0, 0.0), False, False
+        unreal.Rotator(pitch=0.0, yaw=-90.0, roll=0.0), False, False
     )
 
     anim_class = unreal.load_class(
@@ -207,4 +205,5 @@ def main():
     unreal.log("PYW_CONTENT_SETUP_SUCCESS: BP_Enemy and Lvl_EnemyBTTest are ready.")
 
 
-main()
+if __name__ == "__main__":
+    main()
