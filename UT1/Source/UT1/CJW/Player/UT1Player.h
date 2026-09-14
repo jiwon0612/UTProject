@@ -15,10 +15,20 @@ UCLASS()
 class UT1_API AUT1Player : public AUT1Entity
 {
 	GENERATED_BODY()
-	
+public:
+	AUT1Player();
 public:
 	virtual void NotifyControllerChanged() override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+
+
+protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<class USpringArmComponent> SpringArm;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<class UCameraComponent> Camera;
 
 public:
 	void Input_Move(const FInputActionValue& InputValue);
