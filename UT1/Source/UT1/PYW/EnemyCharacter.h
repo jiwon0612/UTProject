@@ -30,6 +30,7 @@ public:
 	TObjectPtr<class UAnimSequence> AttackAnimation;
 
 	float GetAttackDuration() const;
+	float GetAttackCooldownRemaining() const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
 	float DetectionRange = 1500.0f;
@@ -38,7 +39,7 @@ public:
 	float LoseTargetRange = 2200.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
-	float AttackRange = 150.0f;
+	float AttackRange = 150.0f; // Horizontal reach beyond the characters' collision capsules.
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Debug")
 	bool bShowAttackDebug = true;

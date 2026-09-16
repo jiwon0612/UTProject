@@ -2,6 +2,7 @@
 
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/Engine.h"
 #include "Animation/AnimSingleNodeInstance.h"
 #include "Animation/AnimSequence.h"
@@ -69,8 +70,20 @@ void AEnemyCharacter::Tick(float DeltaSeconds)
 
 bool AEnemyCharacter::IsTargetInAttackRange(const AActor* Target) const
 {
-	return IsValid(Target) && Target != this
-		&& FVector::DistSquared(GetActorLocation(), Target->GetActorLocation()) <= FMath::Square(AttackRange);
+	if (!IsValid(Target) || Target == this) return false;
+	const ACharacter* TargetCharacter = Cast<ACharacter>(Target);
+	const UCapsuleComponent* TargetCapsule = TargetCharacter ? TargetCharacter->GetCapsuleComponent() : nullptr;
+	const float TargetRadius = TargetCapsule ? TargetCapsule->GetScaledCapsuleRadius() : 0.0f;
+	const float TargetHalfHeight = TargetCapsule ? TargetCapsule->GetScaledCapsuleHalfHeight() : 0.0f;
+	const float Reach = FMath::Max(AttackRange, 0.0f) + GetCapsuleComponent()->GetScaledCapsuleRadius() + TargetRadius;
+	const FVector Offset = Target->GetActorLocation() - GetActorLocation();
+	return Offset.SizeSquared2D() <= FMath::Square(Reach)
+		&& FMath::Abs(Offset.Z) <= GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + TargetHalfHeight;
+}
+
+float AEnemyCharacter::GetAttackCooldownRemaining() const
+{
+	return FMath::Max(0.0f, static_cast<float>(NextAttackTime - GetWorld()->GetTimeSeconds()));
 }
 
 bool AEnemyCharacter::PerformAttack(AActor* Target)

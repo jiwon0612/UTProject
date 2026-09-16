@@ -214,7 +214,7 @@ EBTNodeResult::Type UEnemyBTTask_Chase::ExecuteTask(UBehaviorTreeComponent& Owne
 	}
 
 	Enemy->SetAIState(EEnemyAIState::Chase);
-	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, 5.0f, false);
+	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, FMath::Max(5.0f, Enemy->AttackRange * 0.5f), false);
 	return Result == EPathFollowingRequestResult::Failed ? EBTNodeResult::Failed : EBTNodeResult::InProgress;
 }
 
@@ -260,10 +260,18 @@ EBTNodeResult::Type UEnemyBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& Own
 {
 	AEnemyCharacter* Enemy = GetEnemy(OwnerComp);
 	AActor* Target = GetTarget(OwnerComp);
-	if (!Enemy || !Enemy->PerformAttack(Target))
+	if (!Enemy || !Enemy->IsTargetInAttackRange(Target))
 	{
 		return EBTNodeResult::Failed;
 	}
+	if (AAIController* Controller = OwnerComp.GetAIOwner()) Controller->StopMovement();
+	if (Enemy->GetAttackCooldownRemaining() > 0.0f)
+	{
+		// Stay in the attack branch while cooling down instead of bouncing through Chase.
+		reinterpret_cast<FTimedTaskMemory*>(NodeMemory)->RemainingTime = Enemy->GetAttackCooldownRemaining();
+		return EBTNodeResult::InProgress;
+	}
+	if (!Enemy->PerformAttack(Target)) return EBTNodeResult::Failed;
 
 	Enemy->SetAIState(EEnemyAIState::Attack);
 	reinterpret_cast<FTimedTaskMemory*>(NodeMemory)->RemainingTime = Enemy->GetAttackDuration();
