@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,14 +5,18 @@
 #include "UT1_RoomManager.generated.h"
 
 class AUT1_RoomBase;
+class AUT1_Portal;
+class UUserWidget;
+class UUT1_PortalWidget;
+
 struct FRoomNode;
 enum class ERoomType : uint8;
 
 UCLASS()
 class UT1_API AUT1_RoomManager : public AActor
 {
-	GENERATED_BODY()
-	
+    GENERATED_BODY()
+
 public:
 
     AUT1_RoomManager();
@@ -31,27 +33,34 @@ public:
     UFUNCTION(BlueprintCallable)
     void MoveToRoom(int32 NextRoomID);
 
+    UFUNCTION(BlueprintCallable)
+    void MoveToNextRoom();
 
-    // 1~6 방향 이동
-    UFUNCTION()
-    void MoveDirection1();
+    // Base로 복귀
+    UFUNCTION(BlueprintCallable)
+    void MoveToBaseRoom();
 
-    UFUNCTION()
-    void MoveDirection2();
-
-    UFUNCTION()
-    void MoveDirection3();
-
-    UFUNCTION()
-    void MoveDirection4();
-
-    UFUNCTION()
-    void MoveDirection5();
-
-    UFUNCTION()
-    void MoveDirection6();
+    // 현재 방이 마지막 방인지
+    UFUNCTION(BlueprintPure)
+    bool IsLastRoom() const;
 
     void SpawnCurrentRoom();
+
+    void SpawnCurrentPortal();
+
+    void DestroyCurrentPortal();
+
+    void TryInteractPortal();
+
+    void ClosePortalWidget();
+
+    const FRoomNode* GetCurrentRoomNode() const;
+
+    int32 GetConnectedRoomID(
+        int32 Direction
+    ) const;
+
+
 public:
 
     UPROPERTY(EditAnywhere, Category = "Room")
@@ -75,47 +84,40 @@ public:
     UPROPERTY(EditAnywhere, Category = "Room")
     FVector RoomSpawnLocation = FVector::ZeroVector;
 
+    UPROPERTY(EditAnywhere, Category = "Portal")
+    TSubclassOf<AUT1_Portal> PortalClass;
+
+    UPROPERTY()
+    AUT1_Portal* CurrentPortal = nullptr;
+
+    UPROPERTY(EditAnywhere, Category = "Portal")
+    FVector PortalSpawnLocation =
+        FVector(1000.f, 0.f, 100.f);
+
+    UPROPERTY(EditAnywhere, Category = "Portal|Widget")
+    TSubclassOf<UUT1_PortalWidget> PortalWidgetClass;
+
+    UPROPERTY()
+    UUT1_PortalWidget* PortalWidget = nullptr;
+
 
 private:
 
-    // Room ID로 찾기
-    FRoomNode* FindRoomNode(int32 RoomID);
-
-    const FRoomNode* FindRoomNode(int32 RoomID) const;
-
-
-    // Hex 좌표로 찾기
-    FRoomNode* FindRoomByHexCoordinate(
-        int32 HexQ,
-        int32 HexR
+    FRoomNode* FindRoomNode(
+        int32 RoomID
     );
 
-    const FRoomNode* FindRoomByHexCoordinate(
-        int32 HexQ,
-        int32 HexR
+    const FRoomNode* FindRoomNode(
+        int32 RoomID
     ) const;
 
-    void CreateRandomHexDungeon();
-
-    bool TryCreateRoomAt(
-        int32 HexQ,
-        int32 HexR
-    );
-
-    int32 GetRoomIDByHexCoordinate(
-        int32 HexQ,
-        int32 HexR
-    ) const;
-
-
-    // RoomType에 맞는 실제 Blueprint Class 반환
     TSubclassOf<AUT1_RoomBase> GetRoomClass(
         FRoomNode& RoomNode
     );
 
 
 private:
+
     UFUNCTION()
     void TestMoveToBaseRoom();
-    void TestMoveHexDirection(int32 Direction);
 };

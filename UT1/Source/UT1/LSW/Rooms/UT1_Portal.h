@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,23 +9,47 @@ class UBoxComponent;
 UCLASS()
 class UT1_API AUT1_Portal : public AActor
 {
-	GENERATED_BODY()
-	
+    GENERATED_BODY()
+
 public:
 
     AUT1_Portal();
 
-protected:
-
-    UPROPERTY(VisibleAnywhere)
-    UBoxComponent* Collision;
-
 public:
+    UPROPERTY(BlueprintReadWrite, EditAnywhere)
+    int32 TargetRoomID = INDEX_NONE;
 
-    UPROPERTY(BlueprintReadWrite)
-    int32 TargetRoomID;
+    bool IsPlayerInRange() const
+    {
+        UWorld* World = GetWorld();
 
-    UFUNCTION()
-    void OnPortalOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+        if (!World)
+        {
+            return false;
+        }
+
+        APlayerController* PC =
+            World->GetFirstPlayerController();
+
+        if (!PC)
+        {
+            return false;
+        }
+
+        APawn* PlayerPawn =
+            PC->GetPawn();
+
+        if (!PlayerPawn)
+        {
+            return false;
+        }
+
+        const float Distance =
+            FVector::Dist(
+                GetActorLocation(),
+                PlayerPawn->GetActorLocation()
+            );
+
+        return Distance <= 200.f;
+    }
 };
