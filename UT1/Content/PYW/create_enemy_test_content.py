@@ -79,6 +79,13 @@ def create_test_level(enemy_blueprint):
     level_subsystem = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     require(level_subsystem.load_level(TEST_LEVEL), "Failed to load the copied test level.")
 
+    wasd_game_mode = require(
+        unreal.load_class(None, "/Script/UT1.WASDGameMode"),
+        "AWASDGameMode was not found. Build UT1Editor first.",
+    )
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    world.get_world_settings().set_editor_property("default_game_mode", wasd_game_mode)
+
     actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     starts = [
         actor

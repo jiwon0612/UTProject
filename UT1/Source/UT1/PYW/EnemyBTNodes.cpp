@@ -88,6 +88,9 @@ void UEnemyBTService_FindTarget::UpdateTarget(UBehaviorTreeComponent& OwnerComp)
 	if (DistanceSquared <= FMath::Square(Enemy->DetectionRange) && Controller->LineOfSightTo(PlayerPawn))
 	{
 		Blackboard->SetValueAsObject(AEnemyAIController::TargetActorKey, PlayerPawn);
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_TARGET_ACQUIRED Enemy=%s Type=%s EnemyLocation=%s TargetLocation=%s Distance=%.1f AttackRange=%.1f"),
+			*Enemy->GetName(), *Enemy->GetCombatTypeText().ToString(), *Enemy->GetActorLocation().ToCompactString(),
+			*PlayerPawn->GetActorLocation().ToCompactString(), FMath::Sqrt(DistanceSquared), Enemy->AttackRange);
 	}
 }
 
@@ -214,7 +217,7 @@ EBTNodeResult::Type UEnemyBTTask_Chase::ExecuteTask(UBehaviorTreeComponent& Owne
 	}
 
 	Enemy->SetAIState(EEnemyAIState::Chase);
-	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, FMath::Max(5.0f, Enemy->AttackRange * 0.5f), false);
+	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, Enemy->GetChaseAcceptanceRadius(), false);
 	return Result == EPathFollowingRequestResult::Failed ? EBTNodeResult::Failed : EBTNodeResult::InProgress;
 }
 
