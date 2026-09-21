@@ -31,6 +31,10 @@ void AUT1_RoomBase::SetupRoom()
 
 }
 
+void AUT1_RoomBase::ResetRoom()
+{
+}
+
 FVector AUT1_RoomBase::GetPlayerSpawnLocation() const
 {
     if (PlayerSpawnPoint)

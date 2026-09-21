@@ -54,9 +54,15 @@ void AUT1_RoomManager::GenerateDungeon()
 {
     RoomNodes.Empty();
 
-    // =========================
-    // Base
-    // =========================
+    if (DungeonRoomCount <= 0)
+    {
+        return;
+    }
+
+    if (NormalRoomClasses.Num() == 0)
+    {
+        return;
+    }
 
     FRoomNode BaseRoom;
 
@@ -65,12 +71,7 @@ void AUT1_RoomManager::GenerateDungeon()
 
     RoomNodes.Add(BaseRoom);
 
-
-    // =========================
-    // Normal Rooms
-    // =========================
-
-    const int32 RoomCount = NormalRoomClasses.Num();
+    const int32 RoomCount = DungeonRoomCount;
 
     for (int32 i = 0; i < RoomCount; ++i)
     {
@@ -79,62 +80,46 @@ void AUT1_RoomManager::GenerateDungeon()
         NewRoom.RoomID = i + 1;
         NewRoom.RoomType = ERoomType::Normal;
 
-        // 이전 방과 다음 방 연결
-        if (i == 0)
-        {
-            NewRoom.ConnectedRoomIDs.Add(0);
-        }
-        else
-        {
-            NewRoom.ConnectedRoomIDs.Add(i);
-        }
+        NewRoom.ConnectedRoomIDs.Add(i);
 
         if (i + 1 < RoomCount)
         {
             NewRoom.ConnectedRoomIDs.Add(i + 2);
         }
 
-        // 방 Blueprint를 생성 시점에 랜덤 결정
         NewRoom.SelectedRoomIndex =
             FMath::RandRange(
                 0,
                 NormalRoomClasses.Num() - 1
             );
 
+
         RoomNodes.Add(NewRoom);
     }
 
-
-    // 시작
     CurrentRoomID = 0;
 
     SpawnCurrentRoom();
+    SpawnCurrentPortal();
 }
 
 void AUT1_RoomManager::MoveToRoom(
     int32 NextRoomID)
 {
-    FRoomNode* NextRoomNode = FindRoomNode(NextRoomID);
-
-    FRoomNode* CurrentRoomNode = FindRoomNode(CurrentRoomID);
-
-    if (!NextRoomNode || !CurrentRoomNode)
-    {
-        return;
-    }
-
     ClosePortalWidget();
 
     DestroyCurrentPortal();
 
     if (CurrentRoomActor)
     {
+        CurrentRoomActor->ResetRoom();
         CurrentRoomActor->Destroy();
-
         CurrentRoomActor = nullptr;
     }
 
     CurrentRoomID = NextRoomID;
+    if(CurrentRoomID == 0 && CurrentPortal == nullptr)
+        SpawnCurrentPortal();
 
     SpawnCurrentRoom();
 }
@@ -146,12 +131,6 @@ void AUT1_RoomManager::MoveToNextRoom()
 
     if (!RoomNodes.IsValidIndex(NextRoomID))
     {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("더 이상 이동할 방이 없습니다.")
-        );
-
         return;
     }
 
@@ -162,12 +141,6 @@ void AUT1_RoomManager::MoveToBaseRoom()
 {
     if (CurrentRoomID == 0)
     {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("이미 Base에 있습니다.")
-        );
-
         return;
     }
 
@@ -244,7 +217,7 @@ void AUT1_RoomManager::SpawnCurrentRoom()
         PlayerSpawnLocation
     );
 
-    SpawnCurrentPortal();
+    // SpawnCurrentPortal();
 }
 
 void AUT1_RoomManager::SpawnCurrentPortal()
@@ -282,71 +255,23 @@ void AUT1_RoomManager::DestroyCurrentPortal()
 
 void AUT1_RoomManager::TryInteractPortal()
 {
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] E Pressed")
-    );
-
     if (!IsValid(CurrentPortal))
     {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] CurrentPortal INVALID")
-        );
-
         return;
     }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] CurrentPortal VALID")
-    );
 
     if (!CurrentPortal->IsPlayerInRange())
     {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("[Portal] Player is NOT in range")
-        );
-
         return;
     }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] Player IN range")
-    );
 
     if (!PortalWidgetClass)
     {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] PortalWidgetClass is NULL")
-        );
-
         return;
     }
 
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] PortalWidgetClass VALID")
-    );
-
     if (IsValid(PortalWidget))
     {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("[Portal] PortalWidget already exists")
-        );
-
         return;
     }
 
@@ -355,45 +280,18 @@ void AUT1_RoomManager::TryInteractPortal()
 
     if (!PC)
     {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] PlayerController NULL")
-        );
-
         return;
     }
 
     PortalWidget =
-        CreateWidget<UUT1_PortalWidget>(
-            PC,
-            PortalWidgetClass
-        );
+        CreateWidget<UUT1_PortalWidget>(PC, PortalWidgetClass);
 
     if (!PortalWidget)
     {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] CreateWidget FAILED")
-        );
-
         return;
     }
 
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] CreateWidget SUCCESS")
-    );
-
     PortalWidget->AddToViewport(100);
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] AddToViewport SUCCESS")
-    );
 }
 
 void AUT1_RoomManager::ClosePortalWidget()
@@ -405,14 +303,12 @@ void AUT1_RoomManager::ClosePortalWidget()
     }
 }
 
-const FRoomNode*
-AUT1_RoomManager::GetCurrentRoomNode() const
+const FRoomNode* AUT1_RoomManager::GetCurrentRoomNode() const
 {
     return FindRoomNode(CurrentRoomID);
 }
 
-FRoomNode*
-AUT1_RoomManager::FindRoomNode(
+FRoomNode* AUT1_RoomManager::FindRoomNode(
     int32 RoomID
 )
 {
@@ -428,8 +324,7 @@ AUT1_RoomManager::FindRoomNode(
 }
 
 
-const FRoomNode*
-AUT1_RoomManager::FindRoomNode(
+const FRoomNode* AUT1_RoomManager::FindRoomNode(
     int32 RoomID
 ) const
 {

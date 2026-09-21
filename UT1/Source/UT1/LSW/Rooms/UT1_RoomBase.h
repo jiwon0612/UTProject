@@ -37,20 +37,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int SelectedRoomIndex;
 
-    // 벌집 좌표
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 HexQ = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 HexR = 0;
-
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bIsCleared = false;
 };
 
 #pragma endregion
-
-class AUT1_Portal;
 
 UCLASS()
 class UT1_API AUT1_RoomBase : public AActor
@@ -67,13 +58,13 @@ public:
     UFUNCTION(BlueprintCallable)
     virtual void SetupRoom();
 
+    UFUNCTION(BlueprintCallable)
+    virtual void ResetRoom();
+
     UFUNCTION(BlueprintCallable, Category = "Room")
     FVector GetPlayerSpawnLocation() const;
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room")
-    TArray<AUT1_Portal*> Portals;
-
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Room")
     USceneComponent* PlayerSpawnPoint;
 };
