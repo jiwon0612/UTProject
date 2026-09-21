@@ -21,7 +21,20 @@ public:
 	virtual void NotifyControllerChanged() override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+public:
+	void ComboAttack();
 
+	void PlayComboStep();
+	void ComboReset();
+
+	int32 ComboIndex = 0;
+	bool bIsAttacking = false;
+	bool bComboQueued = false;
+
+	UFUNCTION()
+	void OnMontageEnd(UAnimMontage* Montage, bool bInterrupted);
+	
+	void RotateToCursor();
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -39,4 +52,11 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = Input)
 	TObjectPtr<class UInputAction> MoveAction;
+
+	UPROPERTY(EditAnywhere, Category = Input)
+	TObjectPtr<class UInputAction> AttackAction;
+
+protected:
+	UPROPERTY(EditAnywhere, Category = Test)
+	TObjectPtr<class UUT1WeaponData> TestWeaponData;
 };
