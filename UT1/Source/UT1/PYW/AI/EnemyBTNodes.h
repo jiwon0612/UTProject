@@ -100,6 +100,32 @@ protected:
 	virtual uint16 GetInstanceMemorySize() const override;
 };
 
+/** Attack branch used only by melee enemies in the runtime Behavior Tree. */
+UCLASS()
+class UT1_API UEnemyBTTask_MeleeAttack : public UEnemyBTTask_Attack
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTTask_MeleeAttack();
+
+protected:
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+};
+
+/** Attack branch used only by ranged enemies in the runtime Behavior Tree. */
+UCLASS()
+class UT1_API UEnemyBTTask_RangedAttack : public UEnemyBTTask_Attack
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTTask_RangedAttack();
+
+protected:
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+};
+
 UCLASS()
 class UT1_API UEnemyBTTask_Idle : public UBTTaskNode
 {

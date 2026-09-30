@@ -1,9 +1,10 @@
-#include "PYW/EnemyProjectile.h"
+#include "PYW/Gameplay/EnemyProjectile.h"
 
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "PYW/Entities/EnemyCharacter.h"
 #include "UObject/ConstructorHelpers.h"
 
 AEnemyProjectile::AEnemyProjectile()
@@ -16,6 +17,7 @@ AEnemyProjectile::AEnemyProjectile()
 	Collision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Collision->SetCollisionObjectType(ECC_WorldDynamic);
 	Collision->SetCollisionResponseToAllChannels(ECR_Block);
+	Collision->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
 	Collision->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	Collision->SetGenerateOverlapEvents(true);
 	RootComponent = Collision;
@@ -56,7 +58,7 @@ void AEnemyProjectile::OnProjectileHit(UPrimitiveComponent* HitComponent, AActor
 void AEnemyProjectile::OnProjectileOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	if (!IsValid(OtherActor) || OtherActor == GetOwner()) return;
+	if (!IsValid(OtherActor) || OtherActor == GetOwner() || OtherActor->IsA<AEnemyCharacter>()) return;
 	ApplyProjectileDamage(OtherActor);
 	Destroy();
 }

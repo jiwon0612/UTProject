@@ -1,6 +1,6 @@
-#include "PYW/WASDGameMode.h"
+#include "PYW/Player/WASDGameMode.h"
 
-#include "PYW/WASDPlayerController.h"
+#include "PYW/Player/WASDPlayerController.h"
 #include "UObject/ConstructorHelpers.h"
 
 AWASDGameMode::AWASDGameMode()

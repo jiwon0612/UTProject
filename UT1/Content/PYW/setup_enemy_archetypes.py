@@ -43,7 +43,12 @@ def configure_enemy(blueprint, locomotion, attacks, death):
     mesh.set_relative_rotation(unreal.Rotator(pitch=0.0, yaw=-90.0, roll=0.0), False, False)
     cdo.set_editor_property("locomotion_animation", locomotion)
     cdo.set_editor_property("attack_animation", attacks[0])
-    cdo.set_editor_property("attack_animations", attacks)
+    # Keep the C++ pattern tuning and only swap in the PYW animation copies.
+    patterns = list(cdo.get_editor_property("attack_patterns"))
+    require(len(patterns) == len(attacks), "Attack pattern count mismatch on " + blueprint.get_name())
+    for pattern, animation in zip(patterns, attacks):
+        pattern.set_editor_property("animation", animation)
+    cdo.set_editor_property("attack_patterns", patterns)
     cdo.set_editor_property("death_animation", death)
     unreal.BlueprintEditorLibrary.compile_blueprint(blueprint)
     require(unreal.EditorAssetLibrary.save_loaded_asset(blueprint, only_if_is_dirty=False), "Failed to save " + blueprint.get_name())
@@ -56,7 +61,9 @@ melee_attacks = [
     ensure_animation_copy("AN_MeleeAttack_03", "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"),
 ]
 ranged_attacks = [
-    ensure_animation_copy("AN_RangedCast", "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack")
+    ensure_animation_copy("AN_RangedQuickCast", "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02"),
+    ensure_animation_copy("AN_RangedCast", "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"),
+    ensure_animation_copy("AN_RangedPowerCast", "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"),
 ]
 death_animation = ensure_animation_copy("AN_EnemyDeath", "/Game/Characters/Mannequins/Anims/Death/MM_Death_Front_01")
 

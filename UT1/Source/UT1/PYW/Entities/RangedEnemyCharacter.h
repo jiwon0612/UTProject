@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PYW/EnemyCharacter.h"
+#include "PYW/Entities/EnemyCharacter.h"
 #include "RangedEnemyCharacter.generated.h"
 
 class AEnemyProjectile;
@@ -22,5 +22,6 @@ public:
 	float ProjectileSpeed = 1200.0f;
 
 protected:
-	virtual bool ExecuteCombatAttack(AActor* Target) override;
+	virtual bool ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex) override;
+	bool SpawnProjectileAtTarget(AActor* Target, float Damage, float YawOffsetDegrees);
 };

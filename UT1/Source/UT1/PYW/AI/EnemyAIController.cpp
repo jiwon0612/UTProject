@@ -1,4 +1,4 @@
-#include "PYW/EnemyAIController.h"
+#include "PYW/AI/EnemyAIController.h"
 
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
@@ -8,7 +8,8 @@
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Vector.h"
 #include "BehaviorTree/Composites/BTComposite_Selector.h"
 #include "BehaviorTree/Composites/BTComposite_Sequence.h"
-#include "PYW/EnemyBTNodes.h"
+#include "PYW/AI/EnemyBTNodes.h"
+#include "PYW/Entities/EnemyCharacter.h"
 
 const FName AEnemyAIController::TargetActorKey(TEXT("TargetActor"));
 const FName AEnemyAIController::PatrolLocationKey(TEXT("PatrolLocation"));
@@ -52,6 +53,17 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
 	}
 }
 
+void AEnemyAIController::SetTargetActor(AActor* NewTarget)
+{
+	UBlackboardComponent* LocalBlackboard = GetBlackboardComponent();
+	if (!LocalBlackboard || !IsValid(NewTarget) || LocalBlackboard->GetValueAsObject(TargetActorKey) == NewTarget)
+	{
+		return;
+	}
+	LocalBlackboard->SetValueAsObject(TargetActorKey, NewTarget);
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_TARGET_AGGRO Enemy=%s Target=%s"), *GetNameSafe(GetPawn()), *GetNameSafe(NewTarget));
+}
+
 void AEnemyAIController::BuildRuntimeBehaviorTree()
 {
 	if (RuntimeBehaviorTree)
@@ -73,10 +85,21 @@ void AEnemyAIController::BuildRuntimeBehaviorTree()
 	RuntimeBehaviorTree->RootNode = Root;
 
 	UBTComposite_Sequence* AttackSequence = NewObject<UBTComposite_Sequence>(RuntimeBehaviorTree, TEXT("AttackSequence"));
-	AttackSequence->NodeName = TEXT("Attack");
+	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(GetPawn());
+	const bool bIsRangedEnemy = Enemy && Enemy->CombatType == EEnemyCombatType::Ranged;
+	AttackSequence->NodeName = bIsRangedEnemy ? TEXT("Ranged Attack") : TEXT("Melee Attack");
 	FBTCompositeChild& AttackBranch = AddCompositeChild(Root, AttackSequence);
 	AttackBranch.Decorators.Add(NewObject<UEnemyBTDecorator_CanAttack>(RuntimeBehaviorTree, TEXT("CanAttack")));
-	AddTaskChild(AttackSequence, NewObject<UEnemyBTTask_Attack>(RuntimeBehaviorTree, TEXT("AttackTask")));
+	if (bIsRangedEnemy)
+	{
+		AddTaskChild(AttackSequence, NewObject<UEnemyBTTask_RangedAttack>(RuntimeBehaviorTree, TEXT("RangedAttackTask")));
+	}
+	else
+	{
+		AddTaskChild(AttackSequence, NewObject<UEnemyBTTask_MeleeAttack>(RuntimeBehaviorTree, TEXT("MeleeAttackTask")));
+	}
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_BT_ATTACK_BRANCH Enemy=%s Branch=%s"),
+		*GetNameSafe(Enemy), bIsRangedEnemy ? TEXT("RangedAttack") : TEXT("MeleeAttack"));
 
 	UBTComposite_Sequence* ChaseSequence = NewObject<UBTComposite_Sequence>(RuntimeBehaviorTree, TEXT("ChaseSequence"));
 	ChaseSequence->NodeName = TEXT("Chase");

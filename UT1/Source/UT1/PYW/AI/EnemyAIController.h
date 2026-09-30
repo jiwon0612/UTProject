@@ -20,6 +20,8 @@ public:
 	static const FName TargetActorKey;
 	static const FName PatrolLocationKey;
 
+	void SetTargetActor(AActor* NewTarget);
+
 protected:
 	virtual void OnPossess(APawn* InPawn) override;
 

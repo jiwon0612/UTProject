@@ -1,4 +1,4 @@
-#include "PYW/EnemyBTNodes.h"
+#include "PYW/AI/EnemyBTNodes.h"
 
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
@@ -7,8 +7,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
-#include "PYW/EnemyAIController.h"
-#include "PYW/EnemyCharacter.h"
+#include "PYW/AI/EnemyAIController.h"
+#include "PYW/Entities/EnemyCharacter.h"
 
 namespace
 {
@@ -268,6 +268,7 @@ EBTNodeResult::Type UEnemyBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& Own
 		return EBTNodeResult::Failed;
 	}
 	if (AAIController* Controller = OwnerComp.GetAIOwner()) Controller->StopMovement();
+	Enemy->SetAIState(EEnemyAIState::Attack);
 	if (Enemy->GetAttackCooldownRemaining() > 0.0f)
 	{
 		// Stay in the attack branch while cooling down instead of bouncing through Chase.
@@ -276,7 +277,6 @@ EBTNodeResult::Type UEnemyBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& Own
 	}
 	if (!Enemy->PerformAttack(Target)) return EBTNodeResult::Failed;
 
-	Enemy->SetAIState(EEnemyAIState::Attack);
 	reinterpret_cast<FTimedTaskMemory*>(NodeMemory)->RemainingTime = Enemy->GetAttackDuration();
 	return EBTNodeResult::InProgress;
 }
@@ -285,6 +285,25 @@ void UEnemyBTTask_Attack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Nod
 {
 	FTimedTaskMemory* Memory = reinterpret_cast<FTimedTaskMemory*>(NodeMemory);
 	Memory->RemainingTime -= DeltaSeconds;
+	AEnemyCharacter* Enemy = GetEnemy(OwnerComp);
+	if (!Enemy)
+	{
+		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+		return;
+	}
+
+	// 공격 모션은 끝까지 유지하고, 쿨다운 대기 중에만 대상을 바라보거나 추적으로 전환함
+	if (!Enemy->IsAttackInProgress())
+	{
+		AActor* Target = GetTarget(OwnerComp);
+		if (!Enemy->IsTargetInAttackRange(Target))
+		{
+			FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+			return;
+		}
+		Enemy->FaceTarget(Target, DeltaSeconds);
+	}
+
 	if (Memory->RemainingTime <= 0.0f)
 	{
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
@@ -294,6 +313,32 @@ void UEnemyBTTask_Attack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Nod
 uint16 UEnemyBTTask_Attack::GetInstanceMemorySize() const
 {
 	return sizeof(FTimedTaskMemory);
+}
+
+UEnemyBTTask_MeleeAttack::UEnemyBTTask_MeleeAttack()
+{
+	NodeName = TEXT("Melee Attack: Slash / Double / Heavy");
+}
+
+EBTNodeResult::Type UEnemyBTTask_MeleeAttack::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
+{
+	AEnemyCharacter* Enemy = GetEnemy(OwnerComp);
+	return Enemy && Enemy->CombatType == EEnemyCombatType::Melee
+		? Super::ExecuteTask(OwnerComp, NodeMemory)
+		: EBTNodeResult::Failed;
+}
+
+UEnemyBTTask_RangedAttack::UEnemyBTTask_RangedAttack()
+{
+	NodeName = TEXT("Ranged Attack: Bolt / Burst / Volley");
+}
+
+EBTNodeResult::Type UEnemyBTTask_RangedAttack::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
+{
+	AEnemyCharacter* Enemy = GetEnemy(OwnerComp);
+	return Enemy && Enemy->CombatType == EEnemyCombatType::Ranged
+		? Super::ExecuteTask(OwnerComp, NodeMemory)
+		: EBTNodeResult::Failed;
 }
 
 UEnemyBTTask_Idle::UEnemyBTTask_Idle()
