@@ -5,7 +5,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
-#include "Engine/Engine.h"
+#include "CJW/Combat/UT1DamageType_Critical.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "UT1.h"
@@ -106,18 +108,8 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 				? AttackInfo.Damage * AttackInfo.CritDamageMultiplier
 				: AttackInfo.Damage;
 
-			if (bCritical)
-			{
-				// 임시 피드백. 데미지 숫자 UI 나 이펙트가 생기면 그쪽으로 옮긴다.
-				UE_LOG(LogUT1, Log, TEXT("[Hit] CRIT %.0f -> %s"), FinalDamage, *HitActor->GetName());
-				if (GEngine != nullptr)
-				{
-					GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Orange,
-						FString::Printf(TEXT("CRIT %.0f"), FinalDamage));
-				}
-			}
-
 			// 엔진 표준 피해 경로. 맞는 쪽은 AUT1Entity::TakeDamage 로 받는다.
+			// 치명타는 DamageType 클래스로 알린다. 맞는 쪽이 그걸 보고 숫자를 다르게 띄운다.
 			UGameplayStatics::ApplyPointDamage(
 				HitActor,
 				FinalDamage,
@@ -125,7 +117,9 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 				Hit,
 				GetInstigatorController(),
 				MyOwner != nullptr ? MyOwner : this,
-				nullptr);
+				bCritical ? UUT1DamageType_Critical::StaticClass() : nullptr);
+
+			SpawnHitEffect(Hit, HitActor, bCritical);
 		}
 
 		if (bDrawDebugTrace)
@@ -136,6 +130,20 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 	}
 
 	PreviousSamplePoints = MoveTemp(Current);
+}
+
+void AUT1Weapon::SpawnHitEffect(const FHitResult& Hit, const AActor* HitActor, bool bCritical) const
+{
+	// 치명타 전용 이펙트가 없으면 일반 이펙트로 대신한다.
+	UNiagaraSystem* Effect = (bCritical && CritHitEffect != nullptr) ? CritHitEffect.Get() : HitEffect.Get();
+	if (Effect == nullptr)
+	{
+		return;
+	}
+
+	// 처음부터 겹쳐 있던 경우 ImpactPoint 가 의미 없으므로 대상 위치를 쓴다.
+	const FVector Location = Hit.bStartPenetrating ? HitActor->GetActorLocation() : FVector(Hit.ImpactPoint);
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, Effect, Location, Hit.ImpactNormal.Rotation());
 }
 
 void AUT1Weapon::EndAttackTrace()
