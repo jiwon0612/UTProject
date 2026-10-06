@@ -10,6 +10,10 @@ MANNY_MESH = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple"
 MANNY_RIG = ROOT + "/IK_Mannequin"
 MONSTER_ROOT = "/Game/CJW/Assets/Dungeon_Pack/Assets/Pack_Characters/Characters/Monsters"
 ANIMS = "/Game/Characters/Mannequins/Anims"
+# CJW의 hackNSlash 검술 콤보는 별도 SK_Mannequin 사본을 써서 그 메시를 원본으로 리타게팅함 (읽기만 함)
+HNS_ANIMS = "/Game/CJW/Assets/hackNSlash/Animations"
+HNS_MESH = "/Game/CJW/Assets/hackNSlash/Demo/Characters/Mannequins/Meshes/SKM_Manny_Simple"
+SOURCE_MESHES = ((HNS_ANIMS, HNS_MESH), (ANIMS, MANNY_MESH))
 
 PROFILES = (
     # key, 접두어, 대상 메시
@@ -40,7 +44,14 @@ SOURCES = (
     # 원거리 시전 자세로 쓰는 조준 모션 (무기 없이 손을 뻗은 모습)
     ANIMS + "/Pistol/MF_Pistol_Idle_ADS",
     ANIMS + "/Rifle/MF_Rifle_Idle_ADS",
+    # 패턴마다 다른 모션을 주기 위한 검술 모션 (무기 없이 쓰면 맨손 찌르기·휘두르기·내려찍기로 보임)
+    HNS_ANIMS + "/Combo_2/Anim_Combo_2_Br_4",
+    HNS_ANIMS + "/Combo_1/Anim_Combo_1_Br_3",
+    HNS_ANIMS + "/Combo_6/Anim_Combo_6_Br_2",
 )
+
+# 골반이 크게 앞으로 나가는 모션임. 적의 이동은 C++ Lunge가 맡으므로 수평 이동을 지워 제자리 모션으로 씀
+IN_PLACE = {"Anim_Combo_2_Br_4", "Anim_Combo_1_Br_3", "Anim_Combo_6_Br_2"}
 
 # Mannequin IK_Mannequin의 체인 이름과 똑같이 지어서 EXACT 자동 매핑이 되게 함.
 # 몬스터는 Rigify 계열이라 spine이 골반, spine_003이 가슴, spine_004/006이 목/머리임.
@@ -114,33 +125,43 @@ def build_retargeter(key, source_rig, target_rig):
     return retargeter
 
 
-def retarget(prefix, folder, source_mesh, target_mesh, retargeter):
-    """배치 리타게팅은 /Game 루트에 결과를 만들기 때문에, 만든 뒤 바로 PYW 폴더로 옮김."""
-    assets = [require(lib.find_asset_data(path).is_valid() and lib.find_asset_data(path), "Missing " + path) for path in SOURCES]
+def retarget(prefix, folder, target_mesh, retargeter):
+    """배치 리타게팅은 /Game 루트에 결과를 만들기 때문에, 만든 뒤 바로 PYW 폴더로 옮김.
+
+    원본 애니메이션의 스켈레톤 에셋마다 원본 메시가 달라서 묶음별로 실행함.
+    """
     for path in SOURCES:
         name = prefix + path.rsplit("/", 1)[1]
         delete_if_exists("/Game/" + name)
         delete_if_exists(folder + "/" + name)
     unreal.SystemLibrary.collect_garbage()
-    unreal.IKRetargetBatchOperation.duplicate_and_retarget(
-        assets, source_mesh, target_mesh, retargeter, "", "", prefix, "", False, True)
+    for source_root, source_mesh_path in SOURCE_MESHES:
+        group = [path for path in SOURCES if path.startswith(source_root + "/")]
+        assets = [require(lib.find_asset_data(path).is_valid() and lib.find_asset_data(path), "Missing " + path) for path in group]
+        source_mesh = require(lib.load_asset(source_mesh_path), "Missing " + source_mesh_path)
+        unreal.IKRetargetBatchOperation.duplicate_and_retarget(
+            assets, source_mesh, target_mesh, retargeter, "", "", prefix, "", False, True)
     result = {}
     for path in SOURCES:
-        name = prefix + path.rsplit("/", 1)[1]
+        source_name = path.rsplit("/", 1)[1]
+        name = prefix + source_name
         require(lib.rename_asset("/Game/" + name, folder + "/" + name), "Failed to move " + name)
         animation = require(lib.load_asset(folder + "/" + name), "Missing " + name)
-        restore_root_scale(animation, target_mesh)
-        result[path.rsplit("/", 1)[1]] = animation
+        restore_root_scale(animation, target_mesh, source_name in IN_PLACE)
+        result[source_name] = animation
     return result
 
 
-def restore_root_scale(animation, mesh):
+def restore_root_scale(animation, mesh, in_place=False):
     """리타게터가 버린 루트 본 배율을 되돌림.
 
     Dungeon Pack 스켈레톤은 Blender에서 넘어와 Root 본에 x100 배율이 있고, 그 아래 본은 미터 단위임.
     리타게터는 본 배율을 지원하지 않아서 결과 Root 배율이 1이 되고, 골반(Root의 직계 자식) 위치는
     cm 값으로 기록됨. 그대로 두면 스키닝에서 메시가 1/100로 줄어들기 때문에, Root 배율을 원래 값으로
     돌리고 직계 자식의 위치를 같은 비율로 나눔. 나머지 본은 원래 로컬 값이 유지되어 손대지 않음.
+
+    in_place이면 골반의 수평(X/Y) 위치를 첫 프레임 값으로 고정해 제자리 모션으로 만듦. 점프 같은
+    수직(Z) 움직임은 남김.
     """
     component = unreal.new_object(unreal.SkeletalMeshComponent, name="RootScaleProbe")
     component.set_skeletal_mesh_asset(mesh)
@@ -162,6 +183,9 @@ def restore_root_scale(animation, mesh):
         else:
             scales = [unreal.Vector(1.0, 1.0, 1.0) for _ in positions]
             positions = [unreal.Vector(p.x / scale.x, p.y / scale.y, p.z / scale.z) for p in positions]
+            if in_place and positions:
+                start = positions[0]
+                positions = [unreal.Vector(start.x, start.y, p.z) for p in positions]
         controller.set_bone_track_keys(bone, positions, rotations, scales, False)
     controller.close_bracket(False)
 
@@ -234,7 +258,6 @@ def remove_legacy_assets():
 
 
 remove_legacy_assets()
-manny_mesh = require(lib.load_asset(MANNY_MESH), "Missing Manny mesh")
 manny_rig = require(lib.load_asset(MANNY_RIG), "Missing IK_Mannequin")
 for key, prefix, mesh_path in PROFILES:
     folder = ROOT + "/" + key
@@ -242,9 +265,9 @@ for key, prefix, mesh_path in PROFILES:
     mesh = require(lib.load_asset(mesh_path), "Missing " + mesh_path)
     rig = build_monster_rig(key, mesh)
     retargeter = build_retargeter(key, manny_rig, rig)
-    anims = retarget(prefix, folder, manny_mesh, mesh, retargeter)
+    anims = retarget(prefix, folder, mesh, retargeter)
     build_locomotion(key, prefix, folder, mesh, anims)
-    for name in ("MM_Attack_01", "MF_Unarmed_Jog_Fwd", "MM_Death_Front_01"):
+    for name in ("MM_Attack_01", "MF_Unarmed_Jog_Fwd", "MM_Death_Front_01") + tuple(sorted(IN_PLACE)):
         unreal.log("PYW_MONSTER_ANIM_CHECK {} {} upper_arm_R={:.1f} thigh_L={:.1f}".format(
             key, name, bone_motion(anims[name], "upper_arm_R"), bone_motion(anims[name], "thigh_L")))
     # 전체 dirty 패키지 저장은 다른 팀원 에셋까지 건드릴 수 있어서 PYW 폴더만 저장함

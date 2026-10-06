@@ -105,6 +105,13 @@ Content/PYW/
   patterns into each Blueprint and maps each source Mannequin clip to the
   retargeted `SM_`/`LM_` clip with the same name, so C++ stays the single
   source of tuning.
+- Every pattern of an enemy uses a different motion. Besides the Mannequin
+  clips, three hackNSlash sword clips from CJW (read-only) are retargeted from
+  their own `SKM_Manny_Simple`: `Anim_Combo_2_Br_4` (melee lunge thrust),
+  `Anim_Combo_1_Br_3` (ranged sweep for the spread volley) and
+  `Anim_Combo_6_Br_2` (brute leap slam). Their pelvis travels far, while the
+  C++ lunge already moves the actor, so `IN_PLACE` clips keep the pelvis X/Y at
+  the first frame (vertical motion such as the jump is kept).
 - There is no unarmed cast clip, so ranged attacks use the pistol/rifle aim
   poses without a weapon (arms pushed forward). These are long loops, so
   `FEnemyAttackPattern::AnimationDuration` plays them only until just after the

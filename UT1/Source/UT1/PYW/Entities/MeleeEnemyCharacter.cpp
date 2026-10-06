@@ -20,10 +20,13 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> Attack03(
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"));
+	// 낮게 몸을 뻗어 찌르는 검술 모션임. 이동은 Lunge가 맡으므로 setup에서 골반 수평 이동을 지운 인플레이스로 씀
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> LungeThrust(
+		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_2/Anim_Combo_2_Br_4"));
 	AttackAnimation = Attack01.Object;
 
-	// 앞의 세 패턴은 AN_MeleeAttack_01~03 순서와 맞춤. setup 스크립트가 순서대로 애니메이션을 교체함
-	// ImpactDelay는 MM_Attack_01~03(1.00s/1.00s/1.67s) 모션의 타격 구간 기준임
+	// 패턴마다 다른 모션을 씀. ImpactDelay는 각 모션의 타격 구간 기준임
+	// MM_Attack_01~03(1.00s/1.00s/1.67s), Anim_Combo_2_Br_4(1.28s, 0.3~0.5s에 가장 멀리 뻗음)
 	AttackPatterns.Reset();
 
 	FEnemyAttackPattern& Slash = AttackPatterns.AddDefaulted_GetRef();
@@ -57,13 +60,13 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 
 	FEnemyAttackPattern& LungeSlash = AttackPatterns.AddDefaulted_GetRef();
 	LungeSlash.Name = TEXT("MeleeLungeSlash");
-	LungeSlash.Animation = Attack01.Object;
+	LungeSlash.Animation = LungeThrust.Object;
 	LungeSlash.Damage = 16.0f;
 	LungeSlash.Cooldown = 0.6f;
-	LungeSlash.ImpactDelay = 0.6f;
+	LungeSlash.ImpactDelay = 0.5f;
 	LungeSlash.MinRange = 150.0f;
 	LungeSlash.MaxRange = 360.0f;
-	LungeSlash.LungeDelay = 0.25f;
+	LungeSlash.LungeDelay = 0.2f;
 	LungeSlash.LungeSpeed = 1200.0f;
 	LungeSlash.LungeLift = 150.0f;
 	LungeSlash.PatternCooldown = 5.0f;

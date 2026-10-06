@@ -29,6 +29,9 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> ChargedAttack(
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"));
+	// 뛰어올라 내려찍는 검술 모션임. 수평 이동은 Lunge가 맡으므로 setup에서 인플레이스로 바꿔 씀
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> JumpSlam(
+		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_6/Anim_Combo_6_Br_2"));
 	AttackAnimation = Attack03.Object;
 	AttackPatterns.Reset();
 
@@ -78,7 +81,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 
 	FEnemyAttackPattern& LeapSlam = AttackPatterns.AddDefaulted_GetRef();
 	LeapSlam.Name = TEXT("BruteLeapSlam");
-	LeapSlam.Animation = Attack03.Object;
+	LeapSlam.Animation = JumpSlam.Object;
 	LeapSlam.Damage = 32.0f;
 	LeapSlam.Cooldown = 1.0f;
 	LeapSlam.ImpactDelay = 1.35f;

@@ -24,6 +24,9 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 		TEXT("/Game/Characters/Mannequins/Anims/Pistol/MF_Pistol_Idle_ADS"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> TwoHandAimAsset(
 		TEXT("/Game/Characters/Mannequins/Anims/Rifle/MF_Rifle_Idle_ADS"));
+	// 몸을 낮췄다가 팔을 크게 휘두르는 검술 모션임. 부채꼴 일제 사격의 손짓으로 씀 (0.8s 부근에서 팔을 가장 멀리 뻗음)
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> SweepAsset(
+		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_1/Anim_Combo_1_Br_3"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> ChargeReleaseAsset(
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"));
 	AttackAnimation = OneHandAimAsset.Object;
@@ -38,10 +41,10 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	MagicBolt.ImpactDelay = 0.35f;
 	MagicBolt.Weight = 3.0f;
 
-	// 조준을 유지한 채 연사함. 마지막 발사 후 0.3초 더 자세를 유지함
+	// 두 손 조준을 유지한 채 연사함. 마지막 발사 후 0.3초 더 자세를 유지함
 	FEnemyAttackPattern& TripleBurst = AttackPatterns.AddDefaulted_GetRef();
 	TripleBurst.Name = TEXT("RangedTripleBurst");
-	TripleBurst.Animation = OneHandAimAsset.Object;
+	TripleBurst.Animation = TwoHandAimAsset.Object;
 	TripleBurst.AnimationDuration = 1.15f;
 	TripleBurst.Damage = 6.0f;
 	TripleBurst.Cooldown = 0.8f;
@@ -50,14 +53,13 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	TripleBurst.HitInterval = 0.18f;
 	TripleBurst.Weight = 2.0f;
 
-	// 두 손을 앞으로 내민 자세로 부채꼴 일제 사격을 함
+	// 팔을 크게 휘두르는 순간 부채꼴로 일제 사격을 함
 	FEnemyAttackPattern& SpreadVolley = AttackPatterns.AddDefaulted_GetRef();
 	SpreadVolley.Name = TEXT("RangedSpreadVolley");
-	SpreadVolley.Animation = TwoHandAimAsset.Object;
-	SpreadVolley.AnimationDuration = 1.0f;
+	SpreadVolley.Animation = SweepAsset.Object;
 	SpreadVolley.Damage = 5.0f;
 	SpreadVolley.Cooldown = 1.0f;
-	SpreadVolley.ImpactDelay = 0.6f;
+	SpreadVolley.ImpactDelay = 0.8f;
 	SpreadVolley.ProjectilesPerHit = 5;
 	SpreadVolley.SpreadAngle = 24.0f;
 	SpreadVolley.PatternCooldown = 3.0f;
