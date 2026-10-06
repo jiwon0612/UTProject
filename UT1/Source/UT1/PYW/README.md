@@ -6,10 +6,13 @@ PYW follows the project-wide feature grouping used by `CJW` and
 ```text
 PYW/
 ├── AI/        Enemy Behavior Tree controller and custom BT nodes
+├── Animation/ Editor-only helpers used by the PYW Python setup scripts
 ├── Entities/  Shared enemy character plus melee/ranged/brute/assassin/bomber archetypes
-├── Gameplay/  Enemy projectile behavior
-└── Player/    WASD test GameMode and PlayerController
+└── Gameplay/  Enemy projectile behavior
 ```
+
+`Lvl_EnemyBTTest` uses CJW's `BP_DavGameMods`, so enemies are tested against the
+real `BP_Player` combat rules instead of a separate test pawn.
 
 # Enemy structure
 
@@ -92,7 +95,10 @@ Content/PYW/
   translation, which shrinks the skinned mesh to 1/100. `restore_root_scale`
   writes the reference scale back and divides the pelvis translation by it.
 - Locomotion is a simple 4-direction Walk(300)/Jog(600) BlendSpace on the axes
-  `AEnemyCharacter::Tick` feeds (Direction -180..180, Speed 0..600).
+  `AEnemyCharacter::Tick` feeds (Direction -180..180, Speed 0..600). Setting
+  `sample_data` from Python does not rebuild the runtime triangulation, which
+  makes the BlendSpace evaluate to the T reference pose; the script calls
+  `UEnemyAnimationLibrary::RebuildBlendSpace` (`UBlendSpace::ResampleData`).
 - Attack patterns keep their C++ timing; the setup maps each pattern's source
   Mannequin clip to the retargeted `SM_`/`LM_` clip with the same name.
 - Hit reactions are retargeted rifle HitReact clips, so the arms briefly take a

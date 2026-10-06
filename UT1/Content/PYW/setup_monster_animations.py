@@ -204,6 +204,9 @@ def build_locomotion(key, prefix, folder, mesh, anims):
     for direction in (-180.0, -90.0, 0.0, 90.0, 180.0):
         samples.append(make_sample(anims["MM_Idle"], direction, 0.0))
     space.set_editor_property("sample_data", samples)
+    # sample_data만 바꾸면 런타임 삼각분할이 비어 T포즈가 나와서 C++ 보조 함수로 다시 계산함
+    valid = unreal.EnemyAnimationLibrary.rebuild_blend_space(space)
+    require(valid == len(samples), "BlendSpace {} has only {}/{} valid samples".format(space.get_name(), valid, len(samples)))
     require(lib.save_loaded_asset(space, only_if_is_dirty=False), "Failed to save blend space")
     return space
 

@@ -12,6 +12,7 @@ ANIM_ROOT = ROOT + "/Animation"
 TEST_LEVEL = ROOT + "/Lvl_EnemyBTTest"
 MONSTER_ROOT = "/Game/CJW/Assets/Dungeon_Pack/Assets/Pack_Characters/Characters/Monsters"
 VFX_ROOT = ROOT + "/ProjectileVFX/Niagara"
+PLAYER_GAME_MODE = "/Game/CJW/Blueprints/GameModes/BP_DavGameMods"
 
 lib = unreal.EditorAssetLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -148,6 +149,10 @@ def configure_projectile(ranged):
 def place_test_enemies(melee, ranged, large):
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     require(levels.load_level(TEST_LEVEL), "Failed to load " + TEST_LEVEL)
+    # 실제 전투 규칙으로 시험하도록 CJW 플레이어(BP_Player)를 쓰는 GameMode로 둠
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    game_mode = require(lib.load_asset(PLAYER_GAME_MODE), "Missing " + PLAYER_GAME_MODE)
+    world.get_world_settings().set_editor_property("default_game_mode", game_mode.generated_class())
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
     def place(label, blueprint, location, death_delay=0.0):
