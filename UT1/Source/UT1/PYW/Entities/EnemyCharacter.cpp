@@ -11,6 +11,7 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
+#include "CJW/Crafting/UT1LootDropComponent.h"
 #include "PYW/AI/EnemyAIController.h"
 #include "PYW/Gameplay/EnemyEffects.h"
 
@@ -37,6 +38,8 @@ AEnemyCharacter::AEnemyCharacter()
 	FEnemyAttackPattern& DefaultPattern = AttackPatterns.AddDefaulted_GetRef();
 	DefaultPattern.Name = TEXT("Default");
 	DefaultPattern.Animation = AttackAsset.Object;
+
+	LootDrop = CreateDefaultSubobject<UUT1LootDropComponent>(TEXT("LootDrop"));
 
 	AIControllerClass = AEnemyAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;

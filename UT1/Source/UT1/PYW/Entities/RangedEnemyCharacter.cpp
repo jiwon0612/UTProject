@@ -36,7 +36,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	MagicBolt.Name = TEXT("RangedMagicBolt");
 	MagicBolt.Animation = OneHandAimAsset.Object;
 	MagicBolt.AnimationDuration = 0.75f;
-	MagicBolt.Damage = 12.0f;
+	MagicBolt.Damage = 6.0f;
 	MagicBolt.Cooldown = 0.6f;
 	MagicBolt.ImpactDelay = 0.35f;
 	MagicBolt.Weight = 3.0f;
@@ -46,7 +46,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	TripleBurst.Name = TEXT("RangedTripleBurst");
 	TripleBurst.Animation = TwoHandAimAsset.Object;
 	TripleBurst.AnimationDuration = 1.15f;
-	TripleBurst.Damage = 6.0f;
+	TripleBurst.Damage = 3.0f;
 	TripleBurst.Cooldown = 0.8f;
 	TripleBurst.ImpactDelay = 0.5f;
 	TripleBurst.HitCount = 3;
@@ -57,7 +57,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	FEnemyAttackPattern& SpreadVolley = AttackPatterns.AddDefaulted_GetRef();
 	SpreadVolley.Name = TEXT("RangedSpreadVolley");
 	SpreadVolley.Animation = SweepAsset.Object;
-	SpreadVolley.Damage = 5.0f;
+	SpreadVolley.Damage = 2.5f;
 	SpreadVolley.Cooldown = 1.0f;
 	SpreadVolley.ImpactDelay = 0.8f;
 	SpreadVolley.ProjectilesPerHit = 5;
@@ -69,7 +69,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	FEnemyAttackPattern& RepelNova = AttackPatterns.AddDefaulted_GetRef();
 	RepelNova.Name = TEXT("RangedRepelNova");
 	RepelNova.Animation = ChargeReleaseAsset.Object;
-	RepelNova.Damage = 8.0f;
+	RepelNova.Damage = 4.0f;
 	RepelNova.Cooldown = 0.6f;
 	RepelNova.ImpactDelay = 0.7f;
 	RepelNova.MaxRange = 180.0f;

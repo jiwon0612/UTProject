@@ -38,7 +38,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& Smash = AttackPatterns.AddDefaulted_GetRef();
 	Smash.Name = TEXT("BruteSmash");
 	Smash.Animation = Attack03.Object;
-	Smash.Damage = 30.0f;
+	Smash.Damage = 15.0f;
 	Smash.Cooldown = 0.9f;
 	Smash.ImpactDelay = 0.7f;
 	Smash.KnockbackStrength = 450.0f;
@@ -50,7 +50,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& GroundSlam = AttackPatterns.AddDefaulted_GetRef();
 	GroundSlam.Name = TEXT("BruteGroundSlam");
 	GroundSlam.Animation = ChargedAttack.Object;
-	GroundSlam.Damage = 24.0f;
+	GroundSlam.Damage = 12.0f;
 	GroundSlam.Cooldown = 1.2f;
 	GroundSlam.ImpactDelay = 0.95f;
 	GroundSlam.MaxRange = 200.0f;
@@ -65,7 +65,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& Charge = AttackPatterns.AddDefaulted_GetRef();
 	Charge.Name = TEXT("BruteCharge");
 	Charge.Animation = Attack01.Object;
-	Charge.Damage = 26.0f;
+	Charge.Damage = 13.0f;
 	Charge.Cooldown = 1.0f;
 	Charge.ImpactDelay = 0.85f;
 	Charge.MinRange = 250.0f;
@@ -82,7 +82,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& LeapSlam = AttackPatterns.AddDefaulted_GetRef();
 	LeapSlam.Name = TEXT("BruteLeapSlam");
 	LeapSlam.Animation = JumpSlam.Object;
-	LeapSlam.Damage = 32.0f;
+	LeapSlam.Damage = 16.0f;
 	LeapSlam.Cooldown = 1.0f;
 	LeapSlam.ImpactDelay = 1.35f;
 	LeapSlam.MinRange = 150.0f;

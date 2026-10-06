@@ -153,6 +153,10 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void Destroyed() override;
 
+	// 죽을 때 재료와 무기 설계도를 떨굼. 드랍 규칙은 CJW 컴포넌트가 맡고, 적 종류별 드랍표는 BP에서 채움
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Loot")
+	TObjectPtr<class UUT1LootDropComponent> LootDrop;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
 	TObjectPtr<class UBlendSpace> LocomotionAnimation;
 

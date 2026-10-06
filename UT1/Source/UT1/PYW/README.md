@@ -73,6 +73,15 @@ the wind-up avoids the hit. With `bShowAttackDebug`, area attacks draw their
 landing circle during the wind-up and state changes ("!", stagger, enrage,
 pattern name) are drawn above the enemy.
 
+# Loot
+
+`AEnemyCharacter` owns CJW's `UUT1LootDropComponent` (`LootDrop`), so every enemy
+drops loot through the shared `OnDied` rule without enemy-specific code. The
+per-enemy tables live in `setup_monster_enemies.py` (`SMALL_LOOT`, `LARGE_LOOT`):
+scrap/wire/cloth with chance and count ranges, and a 13% chance per weapon
+blueprint. Only one blueprint drops at a time and already unlocked blueprints
+(the starting katana) are skipped.
+
 # Monster visuals
 
 C++ defaults still point at Mannequin animations; the Blueprints override them

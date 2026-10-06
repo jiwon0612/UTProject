@@ -14,6 +14,21 @@ MONSTER_ROOT = "/Game/CJW/Assets/Dungeon_Pack/Assets/Pack_Characters/Characters/
 VFX_ROOT = ROOT + "/ProjectileVFX/Niagara"
 PLAYER_GAME_MODE = "/Game/CJW/Blueprints/GameModes/BP_DavGameMods"
 
+# 드랍표. 재료: (데이터, 확률, 최소, 최대). 설계도: (무기 데이터, 확률)
+# 설계도는 위에서부터 굴려 처음 당첨된 1장만 떨어지므로 드문 것부터 둠. 이미 해금한 설계도는 건너뜀
+MATERIALS = "/Game/CJW/Blueprints/Crafting/Materials/"
+WEAPONS = "/Game/CJW/Blueprints/WeaponData/"
+SMALL_LOOT = {
+    "materials": [("DA_Mat_Scrap", 0.9, 1, 3), ("DA_Mat_Wire", 0.5, 1, 2), ("DA_Mat_Cloth", 0.35, 1, 2)],
+    # 무기 설계도는 종류마다 13%. 카타나(TestWeaponData)는 시작 무기라 이미 해금되어 있으면 건너뜀
+    "blueprints": [("TestWeaponData3", 0.13), ("TestWeaponData2", 0.13), ("TestWeaponData", 0.13)],
+}
+# 대형 적은 잡기 어려운 만큼 재료를 더 많이 떨굼. 설계도 확률은 다른 적과 같음
+LARGE_LOOT = {
+    "materials": [("DA_Mat_Scrap", 1.0, 3, 5), ("DA_Mat_Wire", 0.8, 2, 3), ("DA_Mat_Cloth", 0.6, 1, 3)],
+    "blueprints": SMALL_LOOT["blueprints"],
+}
+
 # 패턴 이름 -> (타격 이펙트, 배율, 끌 이미터). C++ 패턴을 복사한 뒤 에셋 의존 데이터만 여기서 붙임
 PATTERN_EFFECTS = {
     # 자폭: 폭발 시스템에서 비행용 이미터(Projectile_*)와 발사 고리를 끄고 폭발(Explosion_*)만 씀.
@@ -111,8 +126,30 @@ def ensure_blueprint(name, parent):
     return require(tools.create_asset(name, BP_ROOT, unreal.Blueprint, factory), "Failed to create " + name)
 
 
-def configure_enemy(blueprint, profile, native_class, capsule=None):
+def configure_loot(cdo, table):
+    """AEnemyCharacter가 기본으로 가진 UT1LootDrop 컴포넌트에 적 종류별 드랍표를 채움."""
+    materials = []
+    for name, chance, low, high in table["materials"]:
+        drop = unreal.UT1MaterialDrop()
+        drop.set_editor_property("material", require(lib.load_asset(MATERIALS + name), "Missing " + name))
+        drop.set_editor_property("chance", chance)
+        drop.set_editor_property("min_count", low)
+        drop.set_editor_property("max_count", high)
+        materials.append(drop)
+    blueprints = []
+    for name, chance in table["blueprints"]:
+        drop = unreal.UT1BlueprintDrop()
+        drop.set_editor_property("weapon", require(lib.load_asset(WEAPONS + name), "Missing " + name))
+        drop.set_editor_property("chance", chance)
+        blueprints.append(drop)
+    loot = cdo.get_editor_property("loot_drop")
+    loot.set_editor_property("material_drops", materials)
+    loot.set_editor_property("blueprint_drops", blueprints)
+
+
+def configure_enemy(blueprint, profile, native_class, capsule=None, loot=SMALL_LOOT):
     cdo = unreal.get_default_object(blueprint.generated_class())
+    configure_loot(cdo, loot)
     # 패턴 수치의 기준은 C++임. BP에 저장된 예전 패턴 대신 C++ 기본값을 복사한 뒤 애니메이션만 몬스터용으로 바꿈
     native = unreal.get_default_object(require(unreal.load_class(None, native_class), "Missing class " + native_class))
     capsule_component = cdo.get_editor_property("capsule_component")
@@ -254,7 +291,7 @@ bomber = ensure_blueprint("BP_BomberEnemy", "/Script/UT1.BomberEnemyCharacter")
 configure_enemy(melee, small, "/Script/UT1.MeleeEnemyCharacter")
 configure_enemy(ranged, small, "/Script/UT1.RangedEnemyCharacter")
 # 대형 메시(약 192cm)가 캡슐 안에 들어오도록 키움. Brute의 1.3배 캡슐 배율은 그대로 유지함
-configure_enemy(large, large_profile, "/Script/UT1.BruteEnemyCharacter", capsule=(42.0, 96.0))
+configure_enemy(large, large_profile, "/Script/UT1.BruteEnemyCharacter", capsule=(42.0, 96.0), loot=LARGE_LOOT)
 # 암살자(0.92배)와 자폭병(0.8배)은 C++ 캡슐 배율로 소형 몬스터를 줄여 씀
 configure_enemy(assassin, small, "/Script/UT1.AssassinEnemyCharacter")
 configure_enemy(bomber, small, "/Script/UT1.BomberEnemyCharacter")
