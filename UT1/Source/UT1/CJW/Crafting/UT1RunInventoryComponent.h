@@ -147,6 +147,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RunInventory|Combat")
 	FUT1WeaponCombatStats GetEquippedCombatStats() const { return GetCombatStats(EquippedWeapon); }
 
+	// 4개 스탯 강화 레벨의 합계.
+	UFUNCTION(BlueprintPure, Category = "RunInventory|Enhance")
+	int32 GetTotalEnhanceLevel(const UUT1WeaponData* Weapon) const;
+
+	// 강화 합계가 규칙의 AuraEnhanceLevelThreshold 이상인지. 무기 오라 표시 조건.
+	UFUNCTION(BlueprintPure, Category = "RunInventory|Enhance")
+	bool ShouldShowAura(const UUT1WeaponData* Weapon) const;
+
 	// 해당 스탯의 강화로 붙은 보너스 (0.2 = +20%, 치명타는 +20%p). UI 표시용.
 	UFUNCTION(BlueprintPure, Category = "RunInventory|Combat")
 	float GetStatBonus(const UUT1WeaponData* Weapon, EUT1WeaponStat Stat) const;

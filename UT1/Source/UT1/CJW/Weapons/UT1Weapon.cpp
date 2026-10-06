@@ -5,7 +5,14 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
-#include "Engine/Engine.h"
+#include "CJW/Combat/UT1DamageType_Critical.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+#include "NiagaraComponent.h"
+
+// MeleeWeaponAura 이펙트가 "어떤 메시 위에 오라를 그릴지" 받는 유저 파라미터 이름.
+// 에셋의 User.01 - Mesh -> Weapon 이며, 코드에서는 "User." 접두어를 뺀 이름으로 쓴다.
+static const FName AuraMeshParameter(TEXT("01 - Mesh -> Weapon"));
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "UT1.h"
@@ -33,6 +40,43 @@ AUT1Weapon::AUT1Weapon()
 
 	TraceEnd = CreateDefaultSubobject<USceneComponent>(TEXT("TraceEnd"));
 	TraceEnd->SetupAttachment(WeaponMesh);
+
+	// 메시의 자식으로 두고 상대 위치를 0 으로 둔다. 메시를 BP 에서 옮기거나 키워도 따라간다.
+	AuraComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("Aura"));
+	AuraComponent->SetupAttachment(WeaponMesh);
+	AuraComponent->SetAutoActivate(false);
+}
+
+void AUT1Weapon::SetAuraActive(bool bActive)
+{
+	if (AuraComponent == nullptr)
+	{
+		return;
+	}
+
+	if (bActive == false || AuraEffect == nullptr)
+	{
+		if (AuraComponent->IsActive())
+		{
+			AuraComponent->Deactivate();
+		}
+		return;
+	}
+
+	if (AuraComponent->IsActive())
+	{
+		return;   // 이미 켜져 있다. 강화할 때마다 다시 켜면 이펙트가 처음부터 재시작된다.
+	}
+
+	if (AuraComponent->GetAsset() != AuraEffect)
+	{
+		AuraComponent->SetAsset(AuraEffect);
+	}
+
+	// 이펙트가 무기 모양대로 그려지도록 자기 메시를 넘긴다. 무기마다 메시가 다르므로
+	// 이펙트 에셋에 박아 두지 않고 켤 때마다 넣는다.
+	AuraComponent->SetVariableObject(AuraMeshParameter, WeaponMesh->GetStaticMesh());
+	AuraComponent->Activate(true);
 }
 
 void AUT1Weapon::BeginAttackTrace()
@@ -106,18 +150,8 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 				? AttackInfo.Damage * AttackInfo.CritDamageMultiplier
 				: AttackInfo.Damage;
 
-			if (bCritical)
-			{
-				// 임시 피드백. 데미지 숫자 UI 나 이펙트가 생기면 그쪽으로 옮긴다.
-				UE_LOG(LogUT1, Log, TEXT("[Hit] CRIT %.0f -> %s"), FinalDamage, *HitActor->GetName());
-				if (GEngine != nullptr)
-				{
-					GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Orange,
-						FString::Printf(TEXT("CRIT %.0f"), FinalDamage));
-				}
-			}
-
 			// 엔진 표준 피해 경로. 맞는 쪽은 AUT1Entity::TakeDamage 로 받는다.
+			// 치명타는 DamageType 클래스로 알린다. 맞는 쪽이 그걸 보고 숫자를 다르게 띄운다.
 			UGameplayStatics::ApplyPointDamage(
 				HitActor,
 				FinalDamage,
@@ -125,7 +159,9 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 				Hit,
 				GetInstigatorController(),
 				MyOwner != nullptr ? MyOwner : this,
-				nullptr);
+				bCritical ? UUT1DamageType_Critical::StaticClass() : nullptr);
+
+			SpawnHitEffect(Hit, HitActor, bCritical);
 		}
 
 		if (bDrawDebugTrace)
@@ -136,6 +172,20 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 	}
 
 	PreviousSamplePoints = MoveTemp(Current);
+}
+
+void AUT1Weapon::SpawnHitEffect(const FHitResult& Hit, const AActor* HitActor, bool bCritical) const
+{
+	// 치명타 전용 이펙트가 없으면 일반 이펙트로 대신한다.
+	UNiagaraSystem* Effect = (bCritical && CritHitEffect != nullptr) ? CritHitEffect.Get() : HitEffect.Get();
+	if (Effect == nullptr)
+	{
+		return;
+	}
+
+	// 처음부터 겹쳐 있던 경우 ImpactPoint 가 의미 없으므로 대상 위치를 쓴다.
+	const FVector Location = Hit.bStartPenetrating ? HitActor->GetActorLocation() : FVector(Hit.ImpactPoint);
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, Effect, Location, Hit.ImpactNormal.Rotation());
 }
 
 void AUT1Weapon::EndAttackTrace()

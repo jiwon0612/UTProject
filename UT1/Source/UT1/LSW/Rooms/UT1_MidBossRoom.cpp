@@ -60,6 +60,11 @@ void AUT1_MidBossRoom::SpawnMidBoss()
 
     if (SpawnedMidBoss)
     {
+        SpawnedMidBoss->SetEnemyLevel(EnemyLevel);
+    }
+
+    if (SpawnedMidBoss)
+    {
         SpawnedMidBoss->OnDied.AddDynamic(
             this,
             &AUT1_MidBossRoom::HandleMidBossDied

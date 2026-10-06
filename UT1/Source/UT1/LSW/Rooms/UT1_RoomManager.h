@@ -108,6 +108,10 @@ public:
     UPROPERTY(EditAnywhere, Category = "Dungeon")
     int32 DungeonRoomCount = 30;
 
+    // 이 수만큼 방을 지날 때마다 적 레벨이 1 오른다 (1~3번 방 Lv1, 4~6번 방 Lv2 ...)
+    UPROPERTY(EditAnywhere, Category = "Dungeon", meta = (ClampMin = "1"))
+    int32 RoomsPerEnemyLevel = 3;
+
     UPROPERTY(EditAnywhere, Category = "Dungeon|Probability")
     float NormalRoomWeight = 60.0f;
 

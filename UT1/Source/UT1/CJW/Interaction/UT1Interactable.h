@@ -35,4 +35,16 @@ class UT1_API IUT1Interactable
 public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
 	void Interact(AUT1Player* Interactor);
+
+	// HUD 안내 문구에 들어갈 동작 이름 (예: "작업대 사용"). 키 표시는 HUD 가 붙인다.
+	// 안내를 대상마다 따로 그리지 않고 HUD 한 곳에서 그리므로, 대상은 문구만 알려 주면 된다.
+	// 호출은 IUT1Interactable::Execute_GetInteractionPrompt(대상) 로 한다.
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
+	FText GetInteractionPrompt() const;
+
+	// 구현하지 않은 대상도 빈칸이 되지 않게 기본 문구를 둔다.
+	virtual FText GetInteractionPrompt_Implementation() const
+	{
+		return NSLOCTEXT("UT1Interaction", "DefaultPrompt", "상호작용");
+	}
 };

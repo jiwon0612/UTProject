@@ -78,6 +78,28 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Trace")
 	bool bDrawDebugTrace = false;
 
+	// 맞은 지점에 터지는 이펙트. 무기마다 다르게 줄 수 있게 무기 BP 에서 지정한다.
+	// 비어 있으면 아무것도 나오지 않는다.
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Feedback")
+	TObjectPtr<class UNiagaraSystem> HitEffect;
+
+	// 치명타 전용. 비어 있으면 HitEffect 를 쓴다.
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Feedback")
+	TObjectPtr<class UNiagaraSystem> CritHitEffect;
+
+	// 강화를 많이 한 무기에 두르는 오라 (MeleeWeaponAura 팩의 NS_StylizedWeapon_*).
+	// 켜는 조건(강화 합계 기준값)은 DA_EnhancementRules 의 AuraEnhanceLevelThreshold 가 정한다.
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Feedback")
+	TObjectPtr<class UNiagaraSystem> AuraEffect;
+
+	// 오라를 그리는 컴포넌트. WeaponMesh 에 위치/회전/크기 그대로 붙어 있어서
+	// 이펙트가 그리는 오버레이 메시가 무기 메시와 정확히 겹친다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon|Feedback")
+	TObjectPtr<class UNiagaraComponent> AuraComponent;
+
+	// 플레이어가 장착/강화 시점에 부른다. AuraEffect 가 비어 있으면 아무것도 하지 않는다.
+	void SetAuraActive(bool bActive);
+
 private:
 	// 이번 스윙에서 이미 때린 대상. 한 번 휘두를 때 한 번만 맞게 한다.
 	UPROPERTY()
@@ -90,4 +112,6 @@ private:
 	bool bTracing = false;
 
 	void BuildSamplePoints(TArray<FVector>& Out) const;
+
+	void SpawnHitEffect(const FHitResult& Hit, const AActor* HitActor, bool bCritical) const;
 };

@@ -377,6 +377,10 @@ void AUT1_RoomManager::SpawnCurrentRoom()
         return;
     }
 
+    // 1번 방부터 RoomsPerEnemyLevel개마다 적 레벨 +1
+    CurrentRoomActor->EnemyLevel =
+        1 + FMath::Max(0, RoomNode->RoomID - 1) / FMath::Max(1, RoomsPerEnemyLevel);
+
     CurrentRoomActor->SetupRoom();
 
     APawn* PlayerPawn =

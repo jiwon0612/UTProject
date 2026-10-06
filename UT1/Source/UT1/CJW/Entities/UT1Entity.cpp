@@ -6,6 +6,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimInstance.h"
+#include "Engine/DamageEvents.h"
+#include "CJW/Combat/UT1DamageType_Critical.h"
+#include "CJW/Combat/UT1CombatFeedbackSubsystem.h"
 #include "UT1.h"
 
 AUT1Entity::AUT1Entity()
@@ -88,6 +91,10 @@ float AUT1Entity::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - ActualDamage);
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 
+	// 실제로 들어간 피해만 보여 준다. 무적/사망 상태는 위에서 이미 걸렀으므로
+	// 회피로 피한 공격에 숫자가 뜨는 일은 없다.
+	ReportDamageFeedback(ActualDamage, DamageEvent);
+
 	if (CurrentHealth <= 0.0f)
 	{
 		HandleDeath(DamageCauser);
@@ -98,6 +105,33 @@ float AUT1Entity::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 	}
 
 	return ActualDamage;
+}
+
+void AUT1Entity::ReportDamageFeedback(float ActualDamage, const FDamageEvent& DamageEvent)
+{
+	UUT1CombatFeedbackSubsystem* Feedback = GetWorld() != nullptr ? GetWorld()->GetSubsystem<UUT1CombatFeedbackSubsystem>() : nullptr;
+	if (Feedback == nullptr)
+	{
+		return;
+	}
+
+	// 치명타 여부는 무기가 실어 보낸 DamageType 클래스로 안다.
+	const bool bCritical = DamageEvent.DamageTypeClass != nullptr
+		&& DamageEvent.DamageTypeClass->IsChildOf(UUT1DamageType_Critical::StaticClass());
+
+	// 무기 트레이스는 FPointDamageEvent 로 맞은 지점을 함께 보낸다. 그 지점에서 숫자를 띄운다.
+	// 시작부터 겹친 경우(bStartPenetrating)는 지점이 의미가 없어 몸 위쪽을 쓴다.
+	FVector Location = GetActorLocation() + FVector(0.0f, 0.0f, 60.0f);
+	if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
+	{
+		const FHitResult& Hit = static_cast<const FPointDamageEvent&>(DamageEvent).HitInfo;
+		if (Hit.bStartPenetrating == false && Hit.ImpactPoint.IsNearlyZero() == false)
+		{
+			Location = Hit.ImpactPoint + FVector(0.0f, 0.0f, 30.0f);
+		}
+	}
+
+	Feedback->ShowDamageNumber(Location, ActualDamage, bCritical, IsPlayerControlled());
 }
 
 void AUT1Entity::Heal(float Amount)

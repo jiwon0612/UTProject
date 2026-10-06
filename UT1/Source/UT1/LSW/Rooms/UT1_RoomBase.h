@@ -67,4 +67,8 @@ public:
 public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Room")
     USceneComponent* PlayerSpawnPoint;
+
+    // 이 방에서 스폰하는 적의 레벨. RoomManager가 SetupRoom 전에 방 진행도로 채운다.
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadWrite, Category = "Room")
+    int32 EnemyLevel = 1;
 };
