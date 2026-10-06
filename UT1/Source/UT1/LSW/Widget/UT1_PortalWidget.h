@@ -19,9 +19,38 @@ class UT1_API UUT1_PortalWidget : public UUserWidget
 protected:
     virtual void NativeConstruct() override;
 
+    virtual FReply NativeOnKeyDown(const FGeometry& InGeometry,
+        const FKeyEvent& InKeyEvent) override;
+
 public:
     UFUNCTION(BlueprintCallable)
     void RefreshRoomList();
+
+    UFUNCTION(BlueprintCallable)
+    void MoveSelectionLeft();
+
+    UFUNCTION(BlueprintCallable)
+    void MoveSelectionRight();
+
+    void RefreshRoomSelection();
+
+    UFUNCTION(BlueprintCallable)
+    void MoveSelectedRoom();
+
+    UFUNCTION()
+    void OnRoomButtonClicked(int32 RoomID);
+
+    void CenterRoom(int32 RoomID);
+
+    void SetupScrollPadding();
+
+    void CenterCurrentRoom();
+
+    bool CanMoveToRoom(int32 RoomID) const;
+
+    AUT1_RoomManager* GetRoomManager() const;
+
+    UWidget* FindRoomButton(int32 RoomID) const;
 
 public:
     UPROPERTY(meta = (BindWidget))
@@ -30,7 +59,7 @@ public:
     UPROPERTY(meta = (BindWidget))
     UHorizontalBox* RoomList;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Button")
     TSubclassOf<UUT1_RoomButton> RoomButtonClass;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
@@ -48,26 +77,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
     UTexture2D* BossRoomImage;
 
-private:
-    UFUNCTION()
-    void OnRoomButtonClicked(int32 RoomID);
+    UPROPERTY(BlueprintReadOnly, Category = "Room Selection")
+    int32 SelectedRoomID = 0;
 
-    AUT1_RoomManager* GetRoomManager() const;
-
-    FString GetRoomTypeName(int32 RoomID) const;
-
-    bool CanMoveToRoom(int32 RoomID) const;
-
-    // 좌우 빈 공간 설정
-    void SetupScrollPadding();
-
-    // 현재 방을 가운데로 이동
-    void CenterCurrentRoom();
-
-private:
-    UPROPERTY()
-    USpacer* LeftSpacer = nullptr;
-
-    UPROPERTY()
-    USpacer* RightSpacer = nullptr;
 };

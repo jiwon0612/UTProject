@@ -54,6 +54,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void Heal(float Amount);
 
+	// 무적 중에는 TakeDamage 가 피해를 버린다.
+	// bool 이 아니라 카운터인 이유: 회피 무적과 피격 후 무적처럼 원인이 겹칠 때
+	// 먼저 끝난 쪽이 다른 쪽의 무적까지 풀어 버리지 않게 하려는 것이다.
+	// Add 와 Remove 는 반드시 짝을 맞춘다.
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool IsInvulnerable() const { return InvulnerableCount > 0; }
+
+	void AddInvulnerable() { ++InvulnerableCount; }
+	void RemoveInvulnerable() { InvulnerableCount = FMath::Max(0, InvulnerableCount - 1); }
+
 	UPROPERTY(BlueprintAssignable, Category = "Health")
 	FUT1HealthChanged OnHealthChanged;
 
@@ -73,6 +83,9 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health")
 	bool bIsDead = false;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health")
+	int32 InvulnerableCount = 0;
 
 	// 비어 있으면 재생을 건너뛴다.
 	UPROPERTY(EditDefaultsOnly, Category = "Health")
