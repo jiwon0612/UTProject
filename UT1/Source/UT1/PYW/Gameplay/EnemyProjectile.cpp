@@ -9,6 +9,7 @@
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 #include "PYW/Entities/EnemyCharacter.h"
+#include "PYW/Gameplay/EnemyEffects.h"
 #include "UObject/ConstructorHelpers.h"
 
 AEnemyProjectile::AEnemyProjectile()
@@ -67,7 +68,7 @@ void AEnemyProjectile::BeginPlay()
 		UNiagaraComponent* Trail = UNiagaraFunctionLibrary::SpawnSystemAttached(TrailEffect, Collision, NAME_None,
 			FVector::ZeroVector, FRotator::ZeroRotator, TrailEffectScale, EAttachLocation::KeepRelativeOffset, true,
 			ENCPoolMethod::None, false);
-		ActivateWithDisabledEmitters(Trail, TrailDisabledEmitters);
+		EnemyEffects::ActivateWithDisabledEmitters(Trail, TrailDisabledEmitters);
 	}
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileLaunched Projectile=%s Location=%s Velocity=%s Trail=%s"),
 		*GetName(), *GetActorLocation().ToCompactString(), *Movement->Velocity.ToCompactString(), *GetNameSafe(TrailEffect));
@@ -110,27 +111,11 @@ void AEnemyProjectile::Explode(AActor* OtherActor, const FVector& ImpactLocation
 	if (bExploded) return;
 	bExploded = true;
 	ApplyProjectileDamage(OtherActor);
-	if (ImpactEffect)
-	{
-		// 액터가 바로 제거되므로 붙이지 않고 월드 위치에 독립적으로 생성함
-		UNiagaraComponent* Impact = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ImpactEffect, ImpactLocation,
-			GetActorRotation(), ImpactEffectScale, true, false);
-		ActivateWithDisabledEmitters(Impact, ImpactDisabledEmitters);
-	}
+	// 액터가 바로 제거되므로 붙이지 않고 월드 위치에 독립적으로 생성함
+	EnemyEffects::SpawnAtLocation(this, ImpactEffect, ImpactLocation, GetActorRotation(), ImpactEffectScale, ImpactDisabledEmitters);
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileExploded Projectile=%s Location=%s Impact=%s"),
 		*GetName(), *ImpactLocation.ToCompactString(), *GetNameSafe(ImpactEffect));
 	Destroy();
-}
-
-void AEnemyProjectile::ActivateWithDisabledEmitters(UNiagaraComponent* Effect, const TArray<FName>& DisabledEmitters)
-{
-	if (!Effect) return;
-	// 컴포넌트가 오버라이드로 저장했다가 활성화할 때 적용하므로 반드시 Activate 전에 꺼야 함
-	for (const FName& EmitterName : DisabledEmitters)
-	{
-		Effect->SetEmitterEnable(EmitterName, false);
-	}
-	Effect->Activate(true);
 }
 
 void AEnemyProjectile::ApplyProjectileDamage(AActor* OtherActor)

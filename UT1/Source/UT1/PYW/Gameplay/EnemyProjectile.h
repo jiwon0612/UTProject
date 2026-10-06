@@ -83,7 +83,5 @@ private:
 	/** 피해, 폭발 이펙트, 제거를 한 번만 처리함. 같은 프레임에 Hit와 Overlap이 함께 와도 중복되지 않음 */
 	void Explode(AActor* OtherActor, const FVector& ImpactLocation);
 
-	static void ActivateWithDisabledEmitters(class UNiagaraComponent* Effect, const TArray<FName>& DisabledEmitters);
-
 	bool bExploded = false;
 };

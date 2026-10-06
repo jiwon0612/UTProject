@@ -14,6 +14,15 @@ MONSTER_ROOT = "/Game/CJW/Assets/Dungeon_Pack/Assets/Pack_Characters/Characters/
 VFX_ROOT = ROOT + "/ProjectileVFX/Niagara"
 PLAYER_GAME_MODE = "/Game/CJW/Blueprints/GameModes/BP_DavGameMods"
 
+# 패턴 이름 -> (타격 이펙트, 배율, 끌 이미터). C++ 패턴을 복사한 뒤 에셋 의존 데이터만 여기서 붙임
+PATTERN_EFFECTS = {
+    # 자폭: 폭발 시스템에서 비행용 이미터(Projectile_*)와 발사 고리를 끄고 폭발(Explosion_*)만 씀.
+    # 검은 폭발 연기(Explosion_Smoke*)는 화면 전체를 가려서 끄고, 충격 고리와 불꽃만 남김
+    "BomberSelfDestruct": (VFX_ROOT + "/NS_VFX_Explosion", 1.3,
+                           ["Emitter_LeafRing", "Projectile_Smoke", "Projectile_VFX", "Projectile_Particle001",
+                            "Explosion_Smoke", "Explosion_Smoke001"]),
+}
+
 lib = unreal.EditorAssetLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 
@@ -119,6 +128,11 @@ def configure_enemy(blueprint, profile, native_class, capsule=None):
     patterns = [pattern.copy() for pattern in native.get_editor_property("attack_patterns")]
     for pattern in patterns:
         pattern.set_editor_property("animation", profile.retargeted(pattern.get_editor_property("animation")))
+        effect = PATTERN_EFFECTS.get(str(pattern.get_editor_property("name")))
+        if effect:
+            pattern.set_editor_property("impact_effect", require(lib.load_asset(effect[0]), "Missing " + effect[0]))
+            pattern.set_editor_property("impact_effect_scale", effect[1])
+            pattern.set_editor_property("impact_disabled_emitters", effect[2])
     cdo.set_editor_property("attack_patterns", patterns)
     cdo.set_editor_property("attack_animation", profile.retargeted(native.get_editor_property("attack_animation")))
     cdo.set_editor_property("death_animation", profile.anim("MM_Death_Front_01"))
@@ -195,7 +209,7 @@ def configure_projectile(ranged):
     require(lib.save_loaded_asset(ranged, only_if_is_dirty=False), "Failed to save " + ranged.get_name())
 
 
-def place_test_enemies(melee, ranged, large):
+def place_test_enemies(melee, ranged, large, assassin, bomber):
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     require(levels.load_level(TEST_LEVEL), "Failed to load " + TEST_LEVEL)
     # 실제 전투 규칙으로 시험하도록 CJW 플레이어(BP_Player)를 쓰는 GameMode로 둠
@@ -222,6 +236,9 @@ def place_test_enemies(melee, ranged, large):
     place("Enemy_Ranged_Test", ranged, unreal.Vector(650.0, 250.0, 150.0))
     place("Enemy_Death_Test", melee, unreal.Vector(400.0, -400.0, 150.0), 1.0)
     place("Enemy_Large_Test", large, unreal.Vector(900.0, -600.0, 200.0))
+    # 암살자는 옆에서 선회하며 파고들고, 자폭병은 멀리서 달려와 터지는 모습이 보이게 둠
+    place("Enemy_Assassin_Test", assassin, unreal.Vector(-700.0, 500.0, 150.0))
+    place("Enemy_Bomber_Test", bomber, unreal.Vector(1200.0, 300.0, 150.0))
     require(levels.save_current_level(), "Failed to save " + TEST_LEVEL)
     lib.save_directory("/Game/__ExternalActors__/PYW/Lvl_EnemyBTTest", only_if_is_dirty=True, recursive=True)
 
@@ -232,11 +249,16 @@ large_profile = Profile("Large", "LM_")
 melee = require(lib.load_asset(BP_ROOT + "/BP_MeleeEnemy"), "Missing BP_MeleeEnemy")
 ranged = require(lib.load_asset(BP_ROOT + "/BP_RangedEnemy"), "Missing BP_RangedEnemy")
 large = ensure_blueprint("BP_LargeEnemy", "/Script/UT1.BruteEnemyCharacter")
+assassin = ensure_blueprint("BP_AssassinEnemy", "/Script/UT1.AssassinEnemyCharacter")
+bomber = ensure_blueprint("BP_BomberEnemy", "/Script/UT1.BomberEnemyCharacter")
 configure_enemy(melee, small, "/Script/UT1.MeleeEnemyCharacter")
 configure_enemy(ranged, small, "/Script/UT1.RangedEnemyCharacter")
 # 대형 메시(약 192cm)가 캡슐 안에 들어오도록 키움. Brute의 1.3배 캡슐 배율은 그대로 유지함
 configure_enemy(large, large_profile, "/Script/UT1.BruteEnemyCharacter", capsule=(42.0, 96.0))
+# 암살자(0.92배)와 자폭병(0.8배)은 C++ 캡슐 배율로 소형 몬스터를 줄여 씀
+configure_enemy(assassin, small, "/Script/UT1.AssassinEnemyCharacter")
+configure_enemy(bomber, small, "/Script/UT1.BomberEnemyCharacter")
 configure_projectile(ranged)
-place_test_enemies(melee, ranged, large)
+place_test_enemies(melee, ranged, large, assassin, bomber)
 delete_unreferenced_redirectors(redirectors)
 unreal.log("PYW_MONSTER_ENEMIES_SUCCESS")

@@ -128,6 +128,17 @@ struct FEnemyAttackPattern
 	// 마지막 타격 후 자신도 사망함 (자폭)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit")
 	bool bConsumesSelf = false;
+
+	// 타격 판정마다 터뜨리는 이펙트임. 범위 공격은 자기 위치, 단일 타격은 맞은 대상 위치에 생성함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Effect")
+	TObjectPtr<class UNiagaraSystem> ImpactEffect;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Effect", meta = (ClampMin = "0.01"))
+	float ImpactEffectScale = 1.0f;
+
+	// 발사·비행·폭발 이미터를 함께 담은 팩 시스템에서 이 공격에 맞지 않는 이미터를 끔
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Effect")
+	TArray<FName> ImpactDisabledEmitters;
 };
 
 UCLASS(Blueprintable)

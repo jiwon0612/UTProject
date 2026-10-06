@@ -20,16 +20,20 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 	StrikeHalfAngle = 60.0f;
 	AttackCooldownVariance = 0.3f;
 
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> Attack01(
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01"));
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> Attack02(
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02"));
-	AttackAnimation = Attack01.Object;
+	// 패턴마다 다른 짧은 검술 모션을 씀 (CJW hackNSlash, 읽기 전용). setup에서 인플레이스로 리타게팅함
+	// QuickThrust 0.62s(0.2~0.3s에 팔을 곧게 뻗음), SpinCuts 0.82s(연달아 휘두름), LowLunge 0.75s(0.45s에 가장 멀리 파고듦)
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> QuickThrust(
+		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_10/Anim_Combo_10_Br_1"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> SpinCuts(
+		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_4/Anim_Combo_4_Br_2"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> LowLunge(
+		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_4/Anim_Combo_4_Br_1"));
+	AttackAnimation = QuickThrust.Object;
 	AttackPatterns.Reset();
 
 	FEnemyAttackPattern& QuickStab = AttackPatterns.AddDefaulted_GetRef();
 	QuickStab.Name = TEXT("AssassinQuickStab");
-	QuickStab.Animation = Attack01.Object;
+	QuickStab.Animation = QuickThrust.Object;
 	QuickStab.Damage = 9.0f;
 	QuickStab.Cooldown = 0.35f;
 	QuickStab.ImpactDelay = 0.22f;
@@ -37,7 +41,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 
 	FEnemyAttackPattern& Flurry = AttackPatterns.AddDefaulted_GetRef();
 	Flurry.Name = TEXT("AssassinFlurry");
-	Flurry.Animation = Attack02.Object;
+	Flurry.Animation = SpinCuts.Object;
 	Flurry.Damage = 6.0f;
 	Flurry.Cooldown = 0.6f;
 	Flurry.ImpactDelay = 0.25f;
@@ -48,7 +52,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 	// 선회하다가 틈을 보고 파고드는 찌르기임
 	FEnemyAttackPattern& LungeStab = AttackPatterns.AddDefaulted_GetRef();
 	LungeStab.Name = TEXT("AssassinLungeStab");
-	LungeStab.Animation = Attack01.Object;
+	LungeStab.Animation = LowLunge.Object;
 	LungeStab.Damage = 16.0f;
 	LungeStab.Cooldown = 0.5f;
 	LungeStab.ImpactDelay = 0.5f;

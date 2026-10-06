@@ -12,6 +12,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "PYW/AI/EnemyAIController.h"
+#include "PYW/Gameplay/EnemyEffects.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {
@@ -458,6 +459,15 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_ATTACK_IMPACT Actor=%s Pattern=%s Hit=%d/%d Target=%s Result=%s"),
 		*GetName(), *ActiveAttackName, HitIndex + 1, ActivePattern.HitCount, *GetNameSafe(Target), bHit ? TEXT("Hit") : TEXT("Miss"));
 
+	// 범위 공격은 빗나가도 폭발이 보여야 하고, 단일 타격은 맞았을 때만 대상 위치에 보여 줌
+	if (ActivePattern.ImpactEffect && (ActivePattern.AreaRadius > 0.0f || bHit))
+	{
+		const FVector EffectLocation = ActivePattern.AreaRadius > 0.0f || !IsValid(Target)
+			? GetActorLocation() : Target->GetActorLocation();
+		EnemyEffects::SpawnAtLocation(this, ActivePattern.ImpactEffect, EffectLocation, GetActorRotation(),
+			FVector(ActivePattern.ImpactEffectScale), ActivePattern.ImpactDisabledEmitters);
+	}
+
 	// 같은 타이머 핸들을 재사용해서 연속 타격이 끝날 때까지 IsAttackInProgress가 유지되게 함
 	if (HitIndex + 1 < ActivePattern.HitCount)
 	{
@@ -475,7 +485,7 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 		}
 		UE_LOG(LogTemp, Display, TEXT("ENEMY_SELF_DESTRUCT Actor=%s Hit=%s"), *GetName(), bHit ? TEXT("true") : TEXT("false"));
 		HandleDeath(this);
-		// 폭발 연출이 없어 쓰러지는 모션 대신 바로 사라지게 함. BP_OnAttack에서 이펙트를 붙일 수 있음
+		// 몸이 폭발로 사라진 것으로 보여 쓰러지는 모션 대신 바로 숨김. 폭발은 패턴의 ImpactEffect가 맡음
 		SetActorHiddenInGame(true);
 		SetLifeSpan(0.2f);
 	}

@@ -48,10 +48,15 @@ SOURCES = (
     HNS_ANIMS + "/Combo_2/Anim_Combo_2_Br_4",
     HNS_ANIMS + "/Combo_1/Anim_Combo_1_Br_3",
     HNS_ANIMS + "/Combo_6/Anim_Combo_6_Br_2",
+    # 암살자: 빠른 찌르기, 연속 베기, 낮은 돌진 찌르기
+    HNS_ANIMS + "/Combo_10/Anim_Combo_10_Br_1",
+    HNS_ANIMS + "/Combo_4/Anim_Combo_4_Br_2",
+    HNS_ANIMS + "/Combo_4/Anim_Combo_4_Br_1",
 )
 
 # 골반이 크게 앞으로 나가는 모션임. 적의 이동은 C++ Lunge가 맡으므로 수평 이동을 지워 제자리 모션으로 씀
-IN_PLACE = {"Anim_Combo_2_Br_4", "Anim_Combo_1_Br_3", "Anim_Combo_6_Br_2"}
+IN_PLACE = {"Anim_Combo_2_Br_4", "Anim_Combo_1_Br_3", "Anim_Combo_6_Br_2",
+            "Anim_Combo_10_Br_1", "Anim_Combo_4_Br_2", "Anim_Combo_4_Br_1"}
 
 # Mannequin IK_Mannequin의 체인 이름과 똑같이 지어서 EXACT 자동 매핑이 되게 함.
 # 몬스터는 Rigify 계열이라 spine이 골반, spine_003이 가슴, spine_004/006이 목/머리임.
