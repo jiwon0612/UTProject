@@ -80,6 +80,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dismantle", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float DismantleRefundRate = 0.7f;
 
+	// 무기 하나의 강화 레벨 합계(4개 스탯)가 이 값 이상이면 무기에 오라 이펙트가 켜진다.
+	// "많이 키운 무기"를 눈으로 보여 주는 보상이라, 밸런스와 함께 여기서 조절한다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Aura", meta = (ClampMin = "1"))
+	int32 AuraEnhanceLevelThreshold = 10;
+
 	// 치명타가 터졌을 때 데미지 배율. 강화는 확률만 올리고 배율은 고정이다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enhance", meta = (ClampMin = "1.0"))
 	float CritDamageMultiplier = 1.5f;
