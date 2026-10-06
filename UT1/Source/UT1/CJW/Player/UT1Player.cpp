@@ -71,7 +71,8 @@ void AUT1Player::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	if (EnhancedInputComponent)
 	{
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this,&AUT1Player::Input_Move);
-		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AUT1Player::ComboAttack);
+		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AUT1Player::Input_AttackPressed);
+		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AUT1Player::Input_AttackHeld);
 
 		if (InteractAction != nullptr)
 		{
@@ -121,6 +122,7 @@ void AUT1Player::NotifyActorBeginOverlap(AActor* OtherActor)
 	if (OtherActor != nullptr && OtherActor->Implements<UUT1Interactable>())
 	{
 		NearbyInteractables.AddUnique(OtherActor);
+		RefreshFocusedInteractable();
 	}
 }
 
@@ -128,29 +130,55 @@ void AUT1Player::NotifyActorEndOverlap(AActor* OtherActor)
 {
 	Super::NotifyActorEndOverlap(OtherActor);
 
-	NearbyInteractables.Remove(OtherActor);
+	if (NearbyInteractables.Remove(OtherActor) > 0)
+	{
+		RefreshFocusedInteractable();
+	}
+}
+
+AActor* AUT1Player::GetFocusedInteractable() const
+{
+	if (IsDead())
+	{
+		return nullptr;
+	}
+
+	// 뒤에서부터(가장 최근에 들어온 대상부터) 살아 있는 것을 찾는다.
+	// 파괴된 항목은 겹침 끝 알림이 올 때 정리되므로 여기서는 건너뛰기만 한다.
+	for (int32 i = NearbyInteractables.Num() - 1; i >= 0; --i)
+	{
+		if (AActor* Target = NearbyInteractables[i].Get())
+		{
+			return Target;
+		}
+	}
+	return nullptr;
+}
+
+void AUT1Player::RefreshFocusedInteractable()
+{
+	AActor* NewTarget = GetFocusedInteractable();
+	if (LastFocusedInteractable.Get() == NewTarget)
+	{
+		return;
+	}
+
+	LastFocusedInteractable = NewTarget;
+	OnFocusedInteractableChanged.Broadcast(NewTarget);
 }
 
 void AUT1Player::Input_Interact()
 {
 	// 공격 중에 열리면 몽타주가 멈춘 채 UI 가 떠서 상태가 꼬인다.
-	if (IsDead() || bIsAttacking || DodgeComponent->IsDodging())
+	if (bIsAttacking || DodgeComponent->IsDodging())
 	{
 		return;
 	}
 
-	// 뒤에서부터(가장 최근에 들어온 대상부터) 살아 있는 것을 찾는다.
-	for (int32 i = NearbyInteractables.Num() - 1; i >= 0; --i)
+	// 사망 검사는 GetFocusedInteractable 안에 있다.
+	if (AActor* Target = GetFocusedInteractable())
 	{
-		AActor* Target = NearbyInteractables[i].Get();
-		if (Target == nullptr)
-		{
-			NearbyInteractables.RemoveAt(i);
-			continue;
-		}
-
 		IUT1Interactable::Execute_Interact(Target, this);
-		return;
 	}
 }
 
@@ -268,6 +296,9 @@ void AUT1Player::HandleDeath(AActor* Killer)
 	DodgeComponent->CancelDodge();
 
 	Super::HandleDeath(Killer);
+
+	// 죽으면 상호작용할 수 없으므로 안내를 내린다. bIsDead 는 베이스에서 켜지므로 그 뒤에 부른다.
+	RefreshFocusedInteractable();
 }
 
 void AUT1Player::StartWeaponTrace()
@@ -365,6 +396,37 @@ void AUT1Player::Tick(float DeltaTime)
 	{
 		AdvanceCombo();
 	}
+}
+
+void AUT1Player::Input_AttackPressed()
+{
+	AttackPressedTime = GetWorld()->GetTimeSeconds();
+	ComboAttack();
+}
+
+void AUT1Player::Input_AttackHeld()
+{
+	// 짧은 클릭은 Started 한 번으로 끝낸다. 기준 시간을 넘겨 누르고 있을 때만 이어 준다.
+	if (GetWorld()->GetTimeSeconds() - AttackPressedTime < HoldAttackThreshold)
+	{
+		return;
+	}
+
+	// 이미 다음 타가 예약돼 있으면 Tick 이 윈도우에서 발동시킨다. 다시 넣을 필요 없다.
+	if (bComboQueued)
+	{
+		return;
+	}
+
+	if (bIsAttacking == false && bRepeatComboWhileHeld == false)
+	{
+		return;
+	}
+
+	// 연타와 똑같은 경로를 탄다. 윈도우 전이면 예약, 윈도우 안이면 즉시 진행,
+	// 윈도우가 지났거나 마지막 단계면 그냥 버려진다. 꾹 누르기용 규칙을 따로 두지 않아
+	// 연타와 꾹 누르기의 결과가 항상 같다.
+	ComboAttack();
 }
 
 void AUT1Player::ComboAttack()

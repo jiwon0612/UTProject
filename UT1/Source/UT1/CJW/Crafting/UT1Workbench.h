@@ -9,7 +9,6 @@
 
 class UStaticMeshComponent;
 class USphereComponent;
-class UTextRenderComponent;
 class UUT1WorkbenchWidget;
 
 /**
@@ -28,12 +27,9 @@ public:
 	AUT1Workbench();
 
 	virtual void Interact_Implementation(AUT1Player* Interactor) override;
+	virtual FText GetInteractionPrompt_Implementation() const override;
 
 protected:
-	// 안내 문구는 작업대 쪽 겹침으로 켜고 끈다. 상호작용 대상 등록은 플레이어 쪽에서 따로 한다.
-	virtual void NotifyActorBeginOverlap(AActor* OtherActor) override;
-	virtual void NotifyActorEndOverlap(AActor* OtherActor) override;
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Workbench")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
@@ -41,9 +37,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Workbench")
 	TObjectPtr<USphereComponent> InteractRange;
 
-	// "E: 작업대". 범위 안에서만 보인다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Workbench")
-	TObjectPtr<UTextRenderComponent> PromptText;
+	// HUD 안내에 들어갈 문구. 범위 안에 들어오면 플레이어 HUD 가 "E  {문구}" 로 띄운다.
+	UPROPERTY(EditAnywhere, Category = "Workbench")
+	FText InteractionPrompt;
 
 	// 기본값은 C++ 위젯(기본 레이아웃). 꾸민 WBP 를 만들면 여기서 바꾼다.
 	UPROPERTY(EditAnywhere, Category = "Workbench")

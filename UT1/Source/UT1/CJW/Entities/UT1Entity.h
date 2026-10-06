@@ -75,6 +75,9 @@ protected:
 	virtual void HandleDamaged(float ActualDamage, AActor* DamageCauser);
 	virtual void HandleDeath(AActor* Killer);
 
+	// 데미지 숫자 등 연출 요청. 연출 방식은 UUT1CombatFeedbackSubsystem 이 정한다.
+	void ReportDamageFeedback(float ActualDamage, const struct FDamageEvent& DamageEvent);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Health", meta = (ClampMin = "1.0"))
 	float MaxHealth = 100.0f;
 
