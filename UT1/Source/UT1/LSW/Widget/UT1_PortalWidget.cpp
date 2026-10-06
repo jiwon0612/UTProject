@@ -1,83 +1,202 @@
 #include "LSW/Widget/UT1_PortalWidget.h"
 
 #include "LSW/Rooms/UT1_RoomManager.h"
-#include "LSW/Rooms/UT1_RoomBase.h"
 #include "LSW/Widget/UT1_RoomButton.h"
+#include "LSW/Rooms/UT1_RoomBase.h"
 
-#include "Components/ScrollBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
-#include "Components/Spacer.h"
-
+#include "Components/ScrollBox.h"
 #include "Kismet/GameplayStatics.h"
+#include "InputCoreTypes.h"
 
 void UUT1_PortalWidget::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    SetIsFocusable(true);
+
+    RefreshRoomList();
+
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimerForNextTick(
+            FTimerDelegate::CreateWeakLambda(
+                this,
+                [this]()
+                {
+                    if (!IsValid(this))
+                        return;
+
+                    SetKeyboardFocus();
+                }
+            )
+        );
+    }
+
+}
+
+FReply UUT1_PortalWidget::NativeOnKeyDown(
+    const FGeometry& InGeometry,
+    const FKeyEvent& InKeyEvent)
+{
+    const FKey Key = InKeyEvent.GetKey();
+
+    if (Key == EKeys::Left)
+    {
+        MoveSelectionLeft();
+        return FReply::Handled();
+    }
+
+    if (Key == EKeys::Right)
+    {
+        MoveSelectionRight();
+        return FReply::Handled();
+    }
+
+    if (Key == EKeys::SpaceBar)
+    {
+        MoveSelectedRoom();
+        return FReply::Handled();
+    }
+
+    return Super::NativeOnKeyDown(
+        InGeometry,
+        InKeyEvent
+    );
+}
+
+void UUT1_PortalWidget::MoveSelectionLeft()
+{
+    AUT1_RoomManager* RoomManager =
+        GetRoomManager();
+
+    if (!RoomManager)
+        return;
+
+    const TArray<FRoomNode>& RoomNodes =
+        RoomManager->GetRoomNodes();
+
+    if (RoomNodes.Num() == 0)
+        return;
+
+    const int32 CurrentIndex =
+        RoomNodes.IndexOfByPredicate(
+            [this](const FRoomNode& Node)
+            {
+                return Node.RoomID == SelectedRoomID;
+            }
+        );
+
+    if (CurrentIndex == INDEX_NONE)
+        return;
+
+    const int32 NewIndex =
+        FMath::Max(0, CurrentIndex - 1);
+
+    SelectedRoomID =
+        RoomNodes[NewIndex].RoomID;
+
+    RefreshRoomSelection();
+    CenterRoom(SelectedRoomID);
+}
+
+void UUT1_PortalWidget::MoveSelectionRight()
+{
+    AUT1_RoomManager* RoomManager =
+        GetRoomManager();
+
+    if (!RoomManager)
+        return;
+
+    const TArray<FRoomNode>& RoomNodes =
+        RoomManager->GetRoomNodes();
+
+    if (RoomNodes.Num() == 0)
+        return;
+
+    const int32 CurrentIndex =
+        RoomNodes.IndexOfByPredicate(
+            [this](const FRoomNode& Node)
+            {
+                return Node.RoomID == SelectedRoomID;
+            }
+        );
+
+    if (CurrentIndex == INDEX_NONE)
+        return;
+
+    const int32 NewIndex =
+        FMath::Min(
+            RoomNodes.Num() - 1,
+            CurrentIndex + 1
+        );
+
+    SelectedRoomID =
+        RoomNodes[NewIndex].RoomID;
+
+    RefreshRoomSelection();
+    CenterRoom(SelectedRoomID);
+}
+
+void UUT1_PortalWidget::RefreshRoomSelection()
+{
+    if (!RoomList)
+        return;
+
+    const TArray<UWidget*>& Children =
+        RoomList->GetAllChildren();
+
+    for (UWidget* Child : Children)
+    {
+        UUT1_RoomButton* RoomButton =
+            Cast<UUT1_RoomButton>(Child);
+
+        if (!RoomButton)
+            continue;
+
+        const bool bSelected =
+            RoomButton->GetRoomID() == SelectedRoomID;
+
+        RoomButton->SetSelected(bSelected);
+    }
+}
+
+void UUT1_PortalWidget::MoveSelectedRoom()
+{
+    AUT1_RoomManager* RoomManager =
+        GetRoomManager();
+
+    if (!RoomManager)
+        return;
+
+    if (!RoomManager->CanMoveToRoom(SelectedRoomID))
+        return;
+
+    RoomManager->MoveToRoom(SelectedRoomID);
+
+    SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void UUT1_PortalWidget::RefreshRoomList()
 {
+    if (!RoomList || !RoomButtonClass)
+        return;
+
     AUT1_RoomManager* RoomManager = GetRoomManager();
 
     if (!RoomManager)
-    {
         return;
-    }
-
-    if (!RoomList)
-    {
-        return;
-    }
-
-    if (!RoomScrollBox)
-    {
-        return;
-    }
-
-    if (!RoomButtonClass)
-    {
-        return;
-    }
 
     RoomList->ClearChildren();
-
-    LeftSpacer = nullptr;
-    RightSpacer = nullptr;
 
     const TArray<FRoomNode>& RoomNodes = RoomManager->GetRoomNodes();
     const int32 CurrentRoomID = RoomManager->GetCurrentRoomID();
 
-    LeftSpacer = NewObject<USpacer>(this);
-
-    if (LeftSpacer)
-    {
-        UHorizontalBoxSlot* SpacerSlot = RoomList->AddChildToHorizontalBox(
-                LeftSpacer);
-
-        if (SpacerSlot)
-        {
-            SpacerSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-        }
-    }
+    SelectedRoomID = CurrentRoomID;
 
     for (const FRoomNode& RoomNode : RoomNodes)
     {
-        if (RoomNode.RoomID == INDEX_NONE)
-        {
-            continue;
-        }
-
-        UUT1_RoomButton* RoomButton = CreateWidget<UUT1_RoomButton>(
-                GetWorld(), RoomButtonClass);
-
-        if (!RoomButton)
-        {
-            continue;
-        }
-
-        const bool bIsCurrent = RoomNode.RoomID == CurrentRoomID;
-        const bool bCanMove = CanMoveToRoom(RoomNode.RoomID);
         UTexture2D* RoomTexture = nullptr;
 
         switch (RoomNode.RoomType)
@@ -106,151 +225,218 @@ void UUT1_PortalWidget::RefreshRoomList()
             break;
         }
 
-        RoomButton->SetupRoomButton(
-            RoomNode.RoomID,
-            RoomTexture,
-            bCanMove,
-            bIsCurrent
+        const bool bCanMove = RoomManager->CanMoveToRoom(RoomNode.RoomID);
+        const bool bIsCurrent = RoomNode.RoomID == CurrentRoomID;
+
+        UUT1_RoomButton* RoomButton = CreateWidget<UUT1_RoomButton>(
+                GetWorld(), RoomButtonClass);
+
+        if (!RoomButton)
+            continue;
+
+        RoomButton->SetupRoomButton(RoomNode.RoomID,
+            RoomTexture, bCanMove, bIsCurrent);
+
+        RoomButton->OnRoomButtonClicked.AddDynamic(
+            this,
+            &UUT1_PortalWidget::OnRoomButtonClicked
         );
 
-        RoomButton->OnRoomButtonClicked.AddDynamic(this, &UUT1_PortalWidget::OnRoomButtonClicked);
-
-        UHorizontalBoxSlot* HorizontalSlot =
+        UHorizontalBoxSlot* HboxSlot =
             RoomList->AddChildToHorizontalBox(RoomButton);
 
-        if (HorizontalSlot)
+        if (HboxSlot)
         {
-            HorizontalSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-            HorizontalSlot->SetHorizontalAlignment(HAlign_Left);
-            HorizontalSlot->SetVerticalAlignment(VAlign_Center);
-            HorizontalSlot->SetPadding(FMargin(5.0f));
+            HboxSlot->SetHorizontalAlignment(HAlign_Center);
+            HboxSlot->SetVerticalAlignment(VAlign_Center);
+
+            HboxSlot->SetPadding(
+                FMargin(20.0f, 0.0f)
+            );
         }
     }
 
-    RightSpacer = NewObject<USpacer>(this);
+    RefreshRoomSelection();
 
-    if (RightSpacer)
+    if (GetWorld())
     {
-        UHorizontalBoxSlot* SpacerSlot = RoomList->AddChildToHorizontalBox(RightSpacer);
+        GetWorld()->GetTimerManager().SetTimerForNextTick(
+            FTimerDelegate::CreateWeakLambda(
+                this,
+                [this]()
+                {
+                    if (!IsValid(this) || !RoomScrollBox)
+                        return;
 
-        if (SpacerSlot)
-        {
-            SpacerSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-        }
+                    GetWorld()->GetTimerManager().SetTimerForNextTick(
+                        FTimerDelegate::CreateWeakLambda(
+                            this,
+                            [this]()
+                            {
+                                if (!IsValid(this))
+                                    return;
+
+                                RefreshRoomSelection();
+                                CenterRoom(SelectedRoomID);
+                            }
+                        )
+                    );
+                }
+            )
+        );
     }
-
-    GetWorld()->GetTimerManager().SetTimerForNextTick(
-        this, &UUT1_PortalWidget::SetupScrollPadding);
 }
-
 
 void UUT1_PortalWidget::SetupScrollPadding()
 {
-    if (!RoomScrollBox || !RoomList ||
-        !LeftSpacer || !RightSpacer)
+    if (!RoomScrollBox ||
+        !RoomList)
     {
         return;
     }
 
+
     RoomScrollBox->ForceLayoutPrepass();
+
     RoomList->ForceLayoutPrepass();
 
-    const float ViewWidth = RoomScrollBox
-        ->GetCachedGeometry().GetLocalSize().X;
+
+    const float ViewWidth =
+        RoomScrollBox
+        ->GetCachedGeometry()
+        .GetLocalSize()
+        .X;
+
 
     if (ViewWidth <= 0.0f)
     {
+        if (GetWorld())
+        {
+            GetWorld()->GetTimerManager().SetTimerForNextTick(
+                FTimerDelegate::CreateWeakLambda(
+                    this,
+                    [this]()
+                    {
+                        if (!IsValid(this))
+                            return;
 
-        GetWorld()->GetTimerManager().SetTimerForNextTick(this,
-            &UUT1_PortalWidget::SetupScrollPadding);
+                        SetupScrollPadding();
+                    }
+                )
+            );
+        }
+
         return;
     }
 
-    const TArray<UWidget*>& Children = RoomList->GetAllChildren();
 
-    float ButtonWidth = 0.0f;
+    const TArray<UWidget*>& Children =
+        RoomList->GetAllChildren();
+
+
+    float ButtonWidth =
+        0.0f;
+
 
     for (UWidget* Child : Children)
     {
-        UUT1_RoomButton* RoomButton = Cast<UUT1_RoomButton>(Child);
+        UUT1_RoomButton* RoomButton =
+            Cast<UUT1_RoomButton>(Child);
+
 
         if (!RoomButton)
         {
             continue;
         }
 
-        ButtonWidth = RoomButton->GetDesiredSize().X;
+
+        ButtonWidth =
+            RoomButton->GetDesiredSize().X;
+
+
         break;
     }
+
 
     if (ButtonWidth <= 0.0f)
     {
         return;
     }
 
-    constexpr float ButtonPadding = 10.0f;
-    const float SpacerWidth = FMath::Max(0.0f,
-            (ViewWidth - (ButtonWidth + ButtonPadding)) * 0.5f);
 
-    LeftSpacer->SetSize(FVector2D(
-        SpacerWidth, 1.0f));
+    constexpr float ButtonPadding =
+        10.0f;
 
-    RightSpacer->SetSize(FVector2D(
-            SpacerWidth, 1.0f));
+
+    const float SpacerWidth =
+        FMath::Max(
+            0.0f,
+            (ViewWidth -
+                (ButtonWidth + ButtonPadding))
+            * 0.5f
+        );
 
     RoomList->ForceLayoutPrepass();
 
-    GetWorld()->GetTimerManager().SetTimerForNextTick(this,
-        &UUT1_PortalWidget::CenterCurrentRoom);
+
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimerForNextTick(
+            FTimerDelegate::CreateWeakLambda(
+                this,
+                [this]()
+                {
+                    if (!IsValid(this))
+                        return;
+
+                    CenterCurrentRoom();
+                }
+            )
+        );
+    }
 }
 
 void UUT1_PortalWidget::CenterCurrentRoom()
 {
+    CenterRoom(
+        SelectedRoomID
+    );
+}
+
+void UUT1_PortalWidget::CenterRoom(int32 RoomID)
+{
     if (!RoomScrollBox || !RoomList)
-    {
         return;
-    }
-
-    AUT1_RoomManager* RoomManager = GetRoomManager();
-
-    if (!RoomManager)
-    {
-        return;
-    }
-
-    const int32 CurrentRoomID = RoomManager->GetCurrentRoomID();
-
 
     const TArray<UWidget*>& Children =
         RoomList->GetAllChildren();
 
-    UUT1_RoomButton* CurrentButton = nullptr;
+    UWidget* TargetWidget = nullptr;
 
     for (UWidget* Child : Children)
     {
-        UUT1_RoomButton* RoomButton = Cast<UUT1_RoomButton>(Child);
+        UUT1_RoomButton* RoomButton =
+            Cast<UUT1_RoomButton>(Child);
 
         if (!RoomButton)
-        {
             continue;
-        }
 
-        if (RoomButton->GetRoomID() == CurrentRoomID)
+        if (RoomButton->GetRoomID() == RoomID)
         {
-            CurrentButton = RoomButton;
+            TargetWidget = RoomButton;
             break;
         }
     }
 
-    if (!CurrentButton)
-    {
+    if (!TargetWidget)
         return;
-    }
 
-    RoomScrollBox->ScrollWidgetIntoView(CurrentButton,
-        false, EDescendantScrollDestination::Center);
+    RoomScrollBox->ScrollWidgetIntoView(
+        TargetWidget,
+        true,
+        EDescendantScrollDestination::Center
+    );
 }
-
 bool UUT1_PortalWidget::CanMoveToRoom(int32 RoomID) const
 {
     AUT1_RoomManager* RoomManager = GetRoomManager();
@@ -260,14 +446,16 @@ bool UUT1_PortalWidget::CanMoveToRoom(int32 RoomID) const
         return false;
     }
 
-    const FRoomNode* CurrentRoom = RoomManager->GetCurrentRoomNode();
+    const FRoomNode* CurrentRoom =
+        RoomManager->GetCurrentRoomNode();
 
     if (!CurrentRoom)
     {
         return false;
     }
 
-    const FRoomNode* TargetRoom = RoomManager->FindRoomNode(RoomID);
+    const FRoomNode* TargetRoom = RoomManager->FindRoomNode(
+            RoomID);
 
     if (!TargetRoom)
     {
@@ -284,78 +472,29 @@ bool UUT1_PortalWidget::CanMoveToRoom(int32 RoomID) const
         return true;
     }
 
-    if (TargetRoom->RoomType == ERoomType::Base)
+    if (TargetRoom->RoomType ==
+        ERoomType::Base)
     {
         return TargetRoom->bIsCleared;
     }
 
-    if (TargetRoom->RoomType == ERoomType::MidBoss)
+    if (TargetRoom->RoomType ==
+        ERoomType::MidBoss)
     {
         return TargetRoom->bIsCleared;
     }
+
 
     return false;
 }
 
-
-FString UUT1_PortalWidget::GetRoomTypeName(int32 RoomID) const
-{
-    AUT1_RoomManager* RoomManager = GetRoomManager();
-
-    if (!RoomManager)
-    {
-        return TEXT("Unknown");
-    }
-
-    const FRoomNode* RoomNode =
-        RoomManager->FindRoomNode(RoomID);
-
-    if (!RoomNode)
-    {
-        return TEXT("Unknown");
-    }
-
-    switch (RoomNode->RoomType)
-    {
-        case ERoomType::Base:
-            return TEXT("Base");
-
-        case ERoomType::Normal:
-            return TEXT("Normal");
-
-        case ERoomType::Gimmick:
-            return TEXT("Reward");
-
-        case ERoomType::MidBoss:
-            return TEXT("Mid Boss");
-
-        case ERoomType::Boss:
-            return TEXT("Boss");
-
-        default:
-            return TEXT("Unknown");
-    }
-}
-
 void UUT1_PortalWidget::OnRoomButtonClicked(int32 RoomID)
 {
-    AUT1_RoomManager* RoomManager = GetRoomManager();
+    SelectedRoomID = RoomID;
 
-    if (!RoomManager)
-    {
-        return;
-    }
-
-    if (!RoomManager->CanMoveToRoom(RoomID))
-    {
-        return;
-    }
-
-    RoomManager->MoveToRoom(RoomID);
-
-    SetVisibility(ESlateVisibility::Collapsed);
+    RefreshRoomSelection();
+    CenterRoom(SelectedRoomID);
 }
-
 
 AUT1_RoomManager* UUT1_PortalWidget::GetRoomManager() const
 {
@@ -364,6 +503,10 @@ AUT1_RoomManager* UUT1_PortalWidget::GetRoomManager() const
         return nullptr;
     }
 
-    return Cast<AUT1_RoomManager>(UGameplayStatics::GetActorOfClass(
-            GetWorld(), AUT1_RoomManager::StaticClass()));
+    return Cast<AUT1_RoomManager>(
+        UGameplayStatics::GetActorOfClass(
+            GetWorld(),
+            AUT1_RoomManager::StaticClass()
+        )
+    );
 }

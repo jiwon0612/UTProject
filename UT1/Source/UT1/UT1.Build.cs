@@ -21,8 +21,8 @@ public class UT1 : ModuleRules
 			"Niagara",
 			"UMG",
 			"Slate",
-			"SlateCore"
-		});
+            "SlateCore"
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
