@@ -346,6 +346,28 @@ const FUT1OwnedWeapon* UUT1RunInventoryComponent::GetEquippedOwnedWeapon() const
 
 // ---------------------------------------------------------------- 전투 스탯
 
+int32 UUT1RunInventoryComponent::GetTotalEnhanceLevel(const UUT1WeaponData* Weapon) const
+{
+	const FUT1OwnedWeapon* Owned = FindOwned(Weapon);
+	if (Owned == nullptr)
+	{
+		return 0;
+	}
+
+	int32 Total = 0;
+	for (const TPair<EUT1WeaponStat, int32>& Pair : Owned->StatLevels)
+	{
+		Total += Pair.Value;
+	}
+	return Total;
+}
+
+bool UUT1RunInventoryComponent::ShouldShowAura(const UUT1WeaponData* Weapon) const
+{
+	return EnhancementRules != nullptr
+		&& GetTotalEnhanceLevel(Weapon) >= EnhancementRules->AuraEnhanceLevelThreshold;
+}
+
 float UUT1RunInventoryComponent::GetStatBonus(const UUT1WeaponData* Weapon, EUT1WeaponStat Stat) const
 {
 	if (EnhancementRules == nullptr)

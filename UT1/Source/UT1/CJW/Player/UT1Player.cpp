@@ -252,6 +252,20 @@ void AUT1Player::EquipWeaponData(UUT1WeaponData* NewWeaponData)
 	}
 
 	ApplyWeaponRangeScale();
+	RefreshWeaponAura();
+}
+
+void AUT1Player::RefreshWeaponAura()
+{
+	// 쌍검처럼 손에 든 무기가 여럿이면 전부 같은 상태로 맞춘다.
+	const bool bShowAura = RunInventory->ShouldShowAura(CurrentWeaponData);
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->SetAuraActive(bShowAura);
+		}
+	}
 }
 
 void AUT1Player::ApplyWeaponRangeScale()
@@ -270,9 +284,10 @@ void AUT1Player::ApplyWeaponRangeScale()
 
 void AUT1Player::HandleInventoryChanged()
 {
-	// 장착 중인 무기를 작업대에서 강화하면 무기 크기가 바로 바뀌어야 한다.
+	// 장착 중인 무기를 작업대에서 강화하면 무기 크기와 오라가 바로 바뀌어야 한다.
 	// 데미지/공속/치명타는 공격할 때마다 새로 읽으므로 여기서 할 일이 없다.
 	ApplyWeaponRangeScale();
+	RefreshWeaponAura();
 }
 
 void AUT1Player::EndPlay(const EEndPlayReason::Type EndPlayReason)
