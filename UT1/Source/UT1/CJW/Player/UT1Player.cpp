@@ -10,8 +10,12 @@
 #include "Animation/AnimInstance.h"
 #include "UT1/CJW/Weapons/UT1WeaponData.h"
 #include "CJW/Weapons/UT1Weapon.h"
+#include "CJW/Crafting/UT1RunInventoryComponent.h"
+#include "CJW/Crafting/UT1MaterialData.h"
+#include "CJW/Interaction/UT1Interactable.h"
 #include "CJW/Combat/UT1DodgeComponent.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "UT1.h"
 
 // 무기가 붙을 소켓 이름. FEquipmentData::bIsRightHanded 가 둘 중 하나를 고른다.
@@ -37,6 +41,7 @@ AUT1Player::AUT1Player()
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 500.f, 0.f);
 	bUseControllerRotationYaw = false;
 
+	RunInventory = CreateDefaultSubobject<UUT1RunInventoryComponent>(TEXT("RunInventory"));
 	DodgeComponent = CreateDefaultSubobject<UUT1DodgeComponent>(TEXT("DodgeComponent"));
 }
 
@@ -68,6 +73,11 @@ void AUT1Player::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this,&AUT1Player::Input_Move);
 		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AUT1Player::ComboAttack);
 
+		if (InteractAction != nullptr)
+		{
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AUT1Player::Input_Interact);
+		}
+
 		if (DodgeAction != nullptr)
 		{
 			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &AUT1Player::Input_Dodge);
@@ -84,9 +94,64 @@ void AUT1Player::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 장착 변경은 인벤토리가 결정하고, 무기 액터 교체는 플레이어가 한다.
+	// 시작 무기 장착보다 먼저 바인딩해야 첫 장착 알림을 놓치지 않는다.
+	RunInventory->OnEquippedWeaponChanged.AddDynamic(this, &AUT1Player::HandleEquippedWeaponChanged);
+	RunInventory->OnInventoryChanged.AddDynamic(this, &AUT1Player::HandleInventoryChanged);
+
 	// TestWeaponData 는 에디터(BP_Player)에서 지정하는 시작 무기다.
-	// 상점이나 획득으로 무기를 바꿀 때도 같은 EquipWeaponData 를 쓰면 된다.
-	EquipWeaponData(TestWeaponData);
+	// 설계도도 같이 주므로, 다른 무기로 바꾼 뒤 분해해도 다시 만들 수 있다.
+	if (TestWeaponData != nullptr)
+	{
+		RunInventory->UnlockBlueprint(TestWeaponData);
+		RunInventory->AddOwnedWeapon(TestWeaponData);
+		RunInventory->EquipWeapon(TestWeaponData);
+	}
+}
+
+void AUT1Player::HandleEquippedWeaponChanged(UUT1WeaponData* NewWeapon)
+{
+	EquipWeaponData(NewWeapon);
+}
+
+void AUT1Player::NotifyActorBeginOverlap(AActor* OtherActor)
+{
+	Super::NotifyActorBeginOverlap(OtherActor);
+
+	if (OtherActor != nullptr && OtherActor->Implements<UUT1Interactable>())
+	{
+		NearbyInteractables.AddUnique(OtherActor);
+	}
+}
+
+void AUT1Player::NotifyActorEndOverlap(AActor* OtherActor)
+{
+	Super::NotifyActorEndOverlap(OtherActor);
+
+	NearbyInteractables.Remove(OtherActor);
+}
+
+void AUT1Player::Input_Interact()
+{
+	// 공격 중에 열리면 몽타주가 멈춘 채 UI 가 떠서 상태가 꼬인다.
+	if (IsDead() || bIsAttacking || DodgeComponent->IsDodging())
+	{
+		return;
+	}
+
+	// 뒤에서부터(가장 최근에 들어온 대상부터) 살아 있는 것을 찾는다.
+	for (int32 i = NearbyInteractables.Num() - 1; i >= 0; --i)
+	{
+		AActor* Target = NearbyInteractables[i].Get();
+		if (Target == nullptr)
+		{
+			NearbyInteractables.RemoveAt(i);
+			continue;
+		}
+
+		IUT1Interactable::Execute_Interact(Target, this);
+		return;
+	}
 }
 
 void AUT1Player::EquipWeaponData(UUT1WeaponData* NewWeaponData)
@@ -157,6 +222,29 @@ void AUT1Player::EquipWeaponData(UUT1WeaponData* NewWeaponData)
 
 		EquippedWeapons.Add(Weapon);
 	}
+
+	ApplyWeaponRangeScale();
+}
+
+void AUT1Player::ApplyWeaponRangeScale()
+{
+	const float Scale = RunInventory->GetCombatStats(CurrentWeaponData).RangeScale;
+
+	// 루트(GripRoot)의 스케일을 바꾸므로 손잡이를 기준으로 커진다. 손에서 빠져 보이지 않는다.
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->SetActorRelativeScale3D(FVector(Scale));
+		}
+	}
+}
+
+void AUT1Player::HandleInventoryChanged()
+{
+	// 장착 중인 무기를 작업대에서 강화하면 무기 크기가 바로 바뀌어야 한다.
+	// 데미지/공속/치명타는 공격할 때마다 새로 읽으므로 여기서 할 일이 없다.
+	ApplyWeaponRangeScale();
 }
 
 void AUT1Player::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -195,12 +283,18 @@ void AUT1Player::StartWeaponTrace()
 
 void AUT1Player::TickWeaponTrace()
 {
-	const float Damage = GetCurrentAttackDamage();
+	const FUT1WeaponCombatStats Stats = RunInventory->GetCombatStats(CurrentWeaponData);
+
+	FUT1AttackInfo AttackInfo;
+	AttackInfo.Damage = GetCurrentAttackDamage();
+	AttackInfo.CritChance = Stats.CritChance;
+	AttackInfo.CritDamageMultiplier = Stats.CritDamageMultiplier;
+
 	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
 	{
 		if (IsValid(Weapon))
 		{
-			Weapon->TickAttackTrace(Damage);
+			Weapon->TickAttackTrace(AttackInfo);
 		}
 	}
 }
@@ -225,7 +319,8 @@ float AUT1Player::GetCurrentAttackDamage() const
 
 	const FComboStep* Step = GetCurrentComboStep();
 	const float Multiplier = (Step != nullptr) ? Step->DamageMultiplier : 1.0f;
-	return CurrentWeaponData->BaseDamage * Multiplier;
+	const float EnhanceMultiplier = RunInventory->GetCombatStats(CurrentWeaponData).DamageMultiplier;
+	return CurrentWeaponData->BaseDamage * Multiplier * EnhanceMultiplier;
 }
 
 void AUT1Player::ClearEquippedWeapons()
@@ -365,7 +460,12 @@ void AUT1Player::PlayComboStep()
 	// 재생 중인 몽타주 위에 그대로 올린다. 이전 몽타주는 블렌드되며 밀려나고
 	// 종료 델리게이트가 bInterrupted = true 로 불린다.
 	CurrentComboMontage = Montage;
-	Anim->Montage_Play(Montage);
+
+	// 공격속도 강화는 재생 속도로 반영한다. 콤보 윈도우와 판정 노티파이는
+	// 몽타주 "안의 시간"(Montage_GetPosition) 기준이라 PlayRate 를 올려도
+	// 따로 맞출 필요 없이 실제 시간 기준으로 함께 짧아진다.
+	const float PlayRate = RunInventory->GetCombatStats(CurrentWeaponData).AttackSpeed;
+	Anim->Montage_Play(Montage, PlayRate);
 
 	FOnMontageEnded EndDelegate;
 	EndDelegate.BindUObject(this, &AUT1Player::OnMontageEnd);
@@ -507,4 +607,140 @@ void AUT1Player::Input_Dodge()
 
 	// 방향이 0 이면 컴포넌트가 바라보는 방향으로 대신 구른다.
 	DodgeComponent->TryDodge(Direction);
+}
+
+// ---------------------------------------------------------------- 테스트 명령 (작업대 UI 전까지)
+
+namespace
+{
+	FString WeaponLabel(const UUT1WeaponData* Weapon)
+	{
+		return Weapon != nullptr ? Weapon->GetDisplayText().ToString() : TEXT("(없음)");
+	}
+
+	FString MaterialLabel(const UUT1MaterialData* Material)
+	{
+		return Material != nullptr ? Material->GetDisplayText().ToString() : TEXT("(없음)");
+	}
+
+	// 로그와 화면에 같이 찍는다. PIE 중에는 화면이, 나중에 확인할 때는 로그가 편하다.
+	void PrintLine(const FString& Line, const FColor& Color = FColor::Cyan)
+	{
+		UE_LOG(LogUT1, Log, TEXT("%s"), *Line);
+		if (GEngine != nullptr)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 8.0f, Color, Line);
+		}
+	}
+
+	void PrintResult(const TCHAR* Action, const UUT1WeaponData* Weapon, EUT1WorkbenchResult Result)
+	{
+		const bool bSuccess = (Result == EUT1WorkbenchResult::Success);
+		PrintLine(FString::Printf(TEXT("[Workbench] %s %s -> %s"),
+			Action, *WeaponLabel(Weapon), *UEnum::GetValueAsString(Result)),
+			bSuccess ? FColor::Green : FColor::Red);
+	}
+}
+
+void AUT1Player::UT1_GiveTestLoot(int32 Count)
+{
+	for (UUT1MaterialData* Material : TestMaterials)
+	{
+		RunInventory->AddMaterial(Material, Count);
+	}
+	for (UUT1WeaponData* Weapon : TestBlueprints)
+	{
+		RunInventory->UnlockBlueprint(Weapon);
+	}
+	UT1_PrintInventory();
+}
+
+void AUT1Player::UT1_Craft(int32 BlueprintIndex)
+{
+	const TArray<TObjectPtr<UUT1WeaponData>>& Blueprints = RunInventory->GetUnlockedBlueprints();
+	UUT1WeaponData* Weapon = Blueprints.IsValidIndex(BlueprintIndex) ? Blueprints[BlueprintIndex].Get() : nullptr;
+
+	PrintResult(TEXT("제작"), Weapon, RunInventory->Craft(Weapon));
+	UT1_PrintInventory();
+}
+
+void AUT1Player::UT1_Enhance(int32 OwnedIndex, const FString& StatName)
+{
+	const int64 StatValue = StaticEnum<EUT1WeaponStat>()->GetValueByNameString(StatName);
+	if (StatValue == INDEX_NONE)
+	{
+		PrintLine(FString::Printf(TEXT("[Workbench] 알 수 없는 스탯 '%s' (AttackPower / AttackSpeed / AttackRange / CritChance)"), *StatName), FColor::Red);
+		return;
+	}
+	const EUT1WeaponStat Stat = static_cast<EUT1WeaponStat>(StatValue);
+
+	const TArray<FUT1OwnedWeapon>& Owned = RunInventory->GetOwnedWeapons();
+	UUT1WeaponData* Weapon = Owned.IsValidIndex(OwnedIndex) ? Owned[OwnedIndex].WeaponData.Get() : nullptr;
+
+	PrintResult(*FString::Printf(TEXT("강화(%s)"), *StatName), Weapon, RunInventory->Enhance(Weapon, Stat));
+	UT1_PrintInventory();
+}
+
+void AUT1Player::UT1_Equip(int32 OwnedIndex)
+{
+	const TArray<FUT1OwnedWeapon>& Owned = RunInventory->GetOwnedWeapons();
+	UUT1WeaponData* Weapon = Owned.IsValidIndex(OwnedIndex) ? Owned[OwnedIndex].WeaponData.Get() : nullptr;
+
+	PrintResult(TEXT("장착"), Weapon, RunInventory->EquipWeapon(Weapon));
+}
+
+void AUT1Player::UT1_Dismantle(int32 OwnedIndex)
+{
+	const TArray<FUT1OwnedWeapon>& Owned = RunInventory->GetOwnedWeapons();
+	UUT1WeaponData* Weapon = Owned.IsValidIndex(OwnedIndex) ? Owned[OwnedIndex].WeaponData.Get() : nullptr;
+
+	PrintResult(TEXT("분해"), Weapon, RunInventory->Dismantle(Weapon));
+	UT1_PrintInventory();
+}
+
+void AUT1Player::UT1_PrintInventory()
+{
+	// 화면 메시지는 새 줄이 위에 쌓이므로, 로그는 순서대로 찍고 화면에는 뒤집어 찍는다.
+	TArray<FString> Lines;
+
+	Lines.Add(TEXT("===== 런 인벤토리 ====="));
+
+	FString MaterialLine = TEXT("재료:");
+	for (const TPair<TObjectPtr<UUT1MaterialData>, int32>& Pair : RunInventory->GetMaterials())
+	{
+		MaterialLine += FString::Printf(TEXT(" %s x%d"), *MaterialLabel(Pair.Key), Pair.Value);
+	}
+	Lines.Add(MaterialLine);
+
+	const TArray<TObjectPtr<UUT1WeaponData>>& Blueprints = RunInventory->GetUnlockedBlueprints();
+	for (int32 i = 0; i < Blueprints.Num(); ++i)
+	{
+		Lines.Add(FString::Printf(TEXT("설계도[%d] %s  (%s)"),
+			i, *WeaponLabel(Blueprints[i]), *UEnum::GetValueAsString(RunInventory->CanCraft(Blueprints[i]))));
+	}
+
+	const TArray<FUT1OwnedWeapon>& Owned = RunInventory->GetOwnedWeapons();
+	for (int32 i = 0; i < Owned.Num(); ++i)
+	{
+		const FUT1OwnedWeapon& Weapon = Owned[i];
+		const bool bEquipped = (Weapon.WeaponData == RunInventory->GetEquippedWeapon());
+		Lines.Add(FString::Printf(TEXT("무기[%d] %s%s  공격력 %d / 공속 %d / 범위 %d / 치명 %d"),
+			i, *WeaponLabel(Weapon.WeaponData), bEquipped ? TEXT(" [장착]") : TEXT(""),
+			Weapon.GetStatLevel(EUT1WeaponStat::AttackPower),
+			Weapon.GetStatLevel(EUT1WeaponStat::AttackSpeed),
+			Weapon.GetStatLevel(EUT1WeaponStat::AttackRange),
+			Weapon.GetStatLevel(EUT1WeaponStat::CritChance)));
+	}
+
+	for (const FString& Line : Lines)
+	{
+		UE_LOG(LogUT1, Log, TEXT("%s"), *Line);
+	}
+	if (GEngine != nullptr)
+	{
+		for (int32 i = Lines.Num() - 1; i >= 0; --i)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 8.0f, FColor::White, Lines[i]);
+		}
+	}
 }

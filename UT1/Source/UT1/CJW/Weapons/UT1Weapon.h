@@ -9,6 +9,18 @@
 class UStaticMeshComponent;
 
 /**
+ * 한 번의 판정 Tick 에 필요한 공격 정보. 플레이어가 강화 스탯을 반영해 채워 넘긴다.
+ * 치명타는 여기서 굴리지 않고 무기가 "맞힐 때마다" 굴린다. 한 번 휘둘러
+ * 여러 적을 맞혔을 때 적마다 따로 판정되게 하기 위해서다.
+ */
+struct FUT1AttackInfo
+{
+	float Damage = 0.0f;
+	float CritChance = 0.0f;
+	float CritDamageMultiplier = 1.5f;
+};
+
+/**
  * 손에 들리는 무기 액터.
  *
  * GripRoot 가 캐릭터의 Weapon_R / Weapon_L 소켓에 붙는 기준점이다.
@@ -34,7 +46,7 @@ public:
 	// 상태(적중 목록, 직전 위치)는 노티파이가 아니라 여기에 둔다.
 	// UAnimNotifyState 는 CDO 하나를 공유하므로 인스턴스 상태를 담을 수 없다.
 	void BeginAttackTrace();
-	void TickAttackTrace(float Damage);
+	void TickAttackTrace(const FUT1AttackInfo& AttackInfo);
 	void EndAttackTrace();
 
 public:

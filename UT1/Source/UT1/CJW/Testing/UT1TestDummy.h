@@ -32,6 +32,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dummy")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
 
+	// 죽으면 드랍한다. 테이블은 레벨에 배치한 인스턴스의 디테일 패널에서 채운다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dummy")
+	TObjectPtr<class UUT1LootDropComponent> LootDrop;
+
 protected:
 	virtual void HandleDamaged(float ActualDamage, AActor* DamageCauser) override;
 	virtual void HandleDeath(AActor* Killer) override;

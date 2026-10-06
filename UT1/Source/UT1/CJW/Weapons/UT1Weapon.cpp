@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "UT1.h"
@@ -44,7 +45,7 @@ void AUT1Weapon::BeginAttackTrace()
 	bTracing = true;
 }
 
-void AUT1Weapon::TickAttackTrace(float Damage)
+void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 {
 	if (bTracing == false)
 	{
@@ -67,6 +68,10 @@ void AUT1Weapon::TickAttackTrace(float Damage)
 
 	AActor* MyOwner = GetOwner();
 
+	// 공격 범위 강화는 무기 액터를 키운다. 판정 점(TraceStart/End)은 자식이라
+	// 저절로 늘어나지만 스윕 구의 반지름은 숫자라서 같은 비율을 직접 곱한다.
+	const float ScaledRadius = TraceRadius * GetActorScale3D().GetMax();
+
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(UT1WeaponTrace), false, this);
 	QueryParams.AddIgnoredActor(this);
 	if (MyOwner != nullptr)
@@ -83,7 +88,7 @@ void AUT1Weapon::TickAttackTrace(float Damage)
 			Current[i],
 			FQuat::Identity,
 			UT1_TRACE_CHANNEL_WEAPON,
-			FCollisionShape::MakeSphere(TraceRadius),
+			FCollisionShape::MakeSphere(ScaledRadius),
 			QueryParams);
 
 		for (const FHitResult& Hit : Hits)
@@ -95,12 +100,27 @@ void AUT1Weapon::TickAttackTrace(float Damage)
 			}
 			HitActorsThisSwing.Add(HitActor);
 
-			// 체력 시스템이 아직 없어서 엔진 표준 경로를 쓴다.
-			// 맞는 쪽이 AActor::TakeDamage 를 오버라이드하면 받을 수 있고,
-			// 나중에 전용 체력 컴포넌트가 생기면 이 호출만 바꾸면 된다.
+			// 치명타는 맞힌 대상마다 따로 굴린다.
+			const bool bCritical = FMath::FRand() < AttackInfo.CritChance;
+			const float FinalDamage = bCritical
+				? AttackInfo.Damage * AttackInfo.CritDamageMultiplier
+				: AttackInfo.Damage;
+
+			if (bCritical)
+			{
+				// 임시 피드백. 데미지 숫자 UI 나 이펙트가 생기면 그쪽으로 옮긴다.
+				UE_LOG(LogUT1, Log, TEXT("[Hit] CRIT %.0f -> %s"), FinalDamage, *HitActor->GetName());
+				if (GEngine != nullptr)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Orange,
+						FString::Printf(TEXT("CRIT %.0f"), FinalDamage));
+				}
+			}
+
+			// 엔진 표준 피해 경로. 맞는 쪽은 AUT1Entity::TakeDamage 로 받는다.
 			UGameplayStatics::ApplyPointDamage(
 				HitActor,
-				Damage,
+				FinalDamage,
 				(Current[i] - PreviousSamplePoints[i]).GetSafeNormal(),
 				Hit,
 				GetInstigatorController(),

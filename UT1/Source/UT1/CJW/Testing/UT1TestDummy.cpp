@@ -2,6 +2,7 @@
 
 
 #include "CJW/Testing/UT1TestDummy.h"
+#include "CJW/Crafting/UT1LootDropComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
@@ -14,6 +15,8 @@ AUT1TestDummy::AUT1TestDummy()
 
 	// 기본 공격 10 데미지 기준 다섯 대면 죽는다. 사망까지 금방 확인된다.
 	MaxHealth = 50.0f;
+
+	LootDrop = CreateDefaultSubobject<UUT1LootDropComponent>(TEXT("LootDrop"));
 
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(GetCapsuleComponent());
