@@ -37,6 +37,9 @@ SOURCES = (
     ANIMS + "/Death/MM_Death_Right_01",
     ANIMS + "/Rifle/HitReact/MM_HitReact_Front_Med_01",
     ANIMS + "/Rifle/HitReact/MM_HitReact_Back_Med_01",
+    # 원거리 시전 자세로 쓰는 조준 모션 (무기 없이 손을 뻗은 모습)
+    ANIMS + "/Pistol/MF_Pistol_Idle_ADS",
+    ANIMS + "/Rifle/MF_Rifle_Idle_ADS",
 )
 
 # Mannequin IK_Mannequin의 체인 이름과 똑같이 지어서 EXACT 자동 매핑이 되게 함.
@@ -205,7 +208,7 @@ def build_locomotion(key, prefix, folder, mesh, anims):
         samples.append(make_sample(anims["MM_Idle"], direction, 0.0))
     space.set_editor_property("sample_data", samples)
     # sample_data만 바꾸면 런타임 삼각분할이 비어 T포즈가 나와서 C++ 보조 함수로 다시 계산함
-    valid = unreal.EnemyAnimationLibrary.rebuild_blend_space(space)
+    valid = unreal.PYWEditorLibrary.rebuild_blend_space(space)
     require(valid == len(samples), "BlendSpace {} has only {}/{} valid samples".format(space.get_name(), valid, len(samples)))
     require(lib.save_loaded_asset(space, only_if_is_dirty=False), "Failed to save blend space")
     return space

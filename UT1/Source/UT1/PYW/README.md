@@ -6,7 +6,7 @@ PYW follows the project-wide feature grouping used by `CJW` and
 ```text
 PYW/
 ├── AI/        Enemy Behavior Tree controller and custom BT nodes
-├── Animation/ Editor-only helpers used by the PYW Python setup scripts
+├── Editor/    Editor-only helpers (UPYWEditorLibrary) for the PYW Python scripts
 ├── Entities/  Shared enemy character plus melee/ranged/brute/assassin/bomber archetypes
 └── Gameplay/  Enemy projectile behavior
 ```
@@ -100,9 +100,15 @@ Content/PYW/
   `AEnemyCharacter::Tick` feeds (Direction -180..180, Speed 0..600). Setting
   `sample_data` from Python does not rebuild the runtime triangulation, which
   makes the BlendSpace evaluate to the T reference pose; the script calls
-  `UEnemyAnimationLibrary::RebuildBlendSpace` (`UBlendSpace::ResampleData`).
-- Attack patterns keep their C++ timing; the setup maps each pattern's source
-  Mannequin clip to the retargeted `SM_`/`LM_` clip with the same name.
+  `UPYWEditorLibrary::RebuildBlendSpace` (`UBlendSpace::ResampleData`).
+- Attack patterns keep their C++ timing; the setup copies the native C++
+  patterns into each Blueprint and maps each source Mannequin clip to the
+  retargeted `SM_`/`LM_` clip with the same name, so C++ stays the single
+  source of tuning.
+- There is no unarmed cast clip, so ranged attacks use the pistol/rifle aim
+  poses without a weapon (arms pushed forward). These are long loops, so
+  `FEnemyAttackPattern::AnimationDuration` plays them only until just after the
+  last shot. Repel Nova uses `MM_ChargedAttack` (charge, then release).
 - Hit reactions are retargeted rifle HitReact clips, so the arms briefly take a
   rifle-holding shape. Replace them when unarmed hit clips are available.
 

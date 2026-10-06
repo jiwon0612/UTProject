@@ -404,7 +404,8 @@ float AEnemyCharacter::GetAttackRecoveryTime() const
 {
 	const float LastHitTime = ActivePattern.ImpactDelay
 		+ (FMath::Max(ActivePattern.HitCount, 1) - 1) * FMath::Max(ActivePattern.HitInterval, 0.01f);
-	const float AnimationLength = ActivePattern.Animation ? ActivePattern.Animation->GetPlayLength() : 0.0f;
+	float AnimationLength = ActivePattern.Animation ? ActivePattern.Animation->GetPlayLength() : 0.0f;
+	if (ActivePattern.AnimationDuration > 0.0f) AnimationLength = FMath::Min(AnimationLength, ActivePattern.AnimationDuration);
 	float Cooldown = FMath::Max(ActivePattern.Cooldown, 0.0f) * (bEnraged ? EnrageCooldownMultiplier : 1.0f);
 	Cooldown *= FMath::FRandRange(1.0f - AttackCooldownVariance, 1.0f + AttackCooldownVariance);
 	return FMath::Max(AnimationLength, LastHitTime) + Cooldown;
@@ -567,8 +568,9 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	NextAttackTime = Now + GetAttackRecoveryTime();
 	if (UAnimSequence* Animation = ActivePattern.Animation)
 	{
-		PlayActionAnimation(Animation);
-		UE_LOG(LogTemp, Display, TEXT("ENEMY_ANIMATION Attack=%s Duration=%.2f"), *Animation->GetName(), Animation->GetPlayLength());
+		PlayActionAnimation(Animation, ActivePattern.AnimationDuration);
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_ANIMATION Attack=%s Duration=%.2f"), *Animation->GetName(),
+			ActivePattern.AnimationDuration > 0.0f ? FMath::Min(ActivePattern.AnimationDuration, Animation->GetPlayLength()) : Animation->GetPlayLength());
 	}
 	BP_OnAttack(Target);
 

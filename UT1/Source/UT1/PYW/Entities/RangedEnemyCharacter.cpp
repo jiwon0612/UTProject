@@ -18,54 +18,58 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	ReactionTime = 0.6f;
 	ProjectileClass = AEnemyProjectile::StaticClass();
 
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> QuickCastAsset(
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02"));
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> RangedAttackAsset(
+	// 맨손 시전 모션이 없어서 권총/소총 조준 자세를 무기 없이 써서 손을 뻗어 쏘는 모습으로 보이게 함.
+	// 조준 자세는 8~9초 루프라 AnimationDuration으로 발사 직후까지만 재생함
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> OneHandAimAsset(
+		TEXT("/Game/Characters/Mannequins/Anims/Pistol/MF_Pistol_Idle_ADS"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> TwoHandAimAsset(
+		TEXT("/Game/Characters/Mannequins/Anims/Rifle/MF_Rifle_Idle_ADS"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> ChargeReleaseAsset(
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"));
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> PowerCastAsset(
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"));
-	AttackAnimation = QuickCastAsset.Object;
-
-	// 앞의 세 패턴은 AN_RangedQuickCast/Cast/PowerCast 순서와 맞춤. setup 스크립트가 순서대로 애니메이션을 교체함
-	// ImpactDelay는 QuickCast/Cast/PowerCast(1.00s/1.83s/1.67s) 모션의 발사 구간 기준임
+	AttackAnimation = OneHandAimAsset.Object;
 	AttackPatterns.Reset();
 
 	FEnemyAttackPattern& MagicBolt = AttackPatterns.AddDefaulted_GetRef();
 	MagicBolt.Name = TEXT("RangedMagicBolt");
-	MagicBolt.Animation = QuickCastAsset.Object;
+	MagicBolt.Animation = OneHandAimAsset.Object;
+	MagicBolt.AnimationDuration = 0.75f;
 	MagicBolt.Damage = 12.0f;
 	MagicBolt.Cooldown = 0.6f;
 	MagicBolt.ImpactDelay = 0.35f;
 	MagicBolt.Weight = 3.0f;
 
+	// 조준을 유지한 채 연사함. 마지막 발사 후 0.3초 더 자세를 유지함
 	FEnemyAttackPattern& TripleBurst = AttackPatterns.AddDefaulted_GetRef();
 	TripleBurst.Name = TEXT("RangedTripleBurst");
-	TripleBurst.Animation = RangedAttackAsset.Object;
+	TripleBurst.Animation = OneHandAimAsset.Object;
+	TripleBurst.AnimationDuration = 1.15f;
 	TripleBurst.Damage = 6.0f;
 	TripleBurst.Cooldown = 0.8f;
-	TripleBurst.ImpactDelay = 0.7f;
+	TripleBurst.ImpactDelay = 0.5f;
 	TripleBurst.HitCount = 3;
 	TripleBurst.HitInterval = 0.18f;
 	TripleBurst.Weight = 2.0f;
 
+	// 두 손을 앞으로 내민 자세로 부채꼴 일제 사격을 함
 	FEnemyAttackPattern& SpreadVolley = AttackPatterns.AddDefaulted_GetRef();
 	SpreadVolley.Name = TEXT("RangedSpreadVolley");
-	SpreadVolley.Animation = PowerCastAsset.Object;
+	SpreadVolley.Animation = TwoHandAimAsset.Object;
+	SpreadVolley.AnimationDuration = 1.0f;
 	SpreadVolley.Damage = 5.0f;
 	SpreadVolley.Cooldown = 1.0f;
-	SpreadVolley.ImpactDelay = 0.65f;
+	SpreadVolley.ImpactDelay = 0.6f;
 	SpreadVolley.ProjectilesPerHit = 5;
 	SpreadVolley.SpreadAngle = 24.0f;
 	SpreadVolley.PatternCooldown = 3.0f;
 	SpreadVolley.Weight = 1.5f;
 
-	// 붙어 오는 대상을 밀쳐 내고 다시 거리를 벌리기 위한 근거리 폭발임
+	// 붙어 오는 대상을 밀쳐 내고 다시 거리를 벌리기 위한 근거리 폭발임. 힘을 모았다 터뜨리는 모션의 방출 구간에 맞춤
 	FEnemyAttackPattern& RepelNova = AttackPatterns.AddDefaulted_GetRef();
 	RepelNova.Name = TEXT("RangedRepelNova");
-	RepelNova.Animation = PowerCastAsset.Object;
+	RepelNova.Animation = ChargeReleaseAsset.Object;
 	RepelNova.Damage = 8.0f;
 	RepelNova.Cooldown = 0.6f;
-	RepelNova.ImpactDelay = 0.45f;
+	RepelNova.ImpactDelay = 0.7f;
 	RepelNova.MaxRange = 180.0f;
 	RepelNova.AreaRadius = 240.0f;
 	RepelNova.KnockbackStrength = 650.0f;

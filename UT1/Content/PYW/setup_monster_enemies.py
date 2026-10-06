@@ -102,8 +102,10 @@ def ensure_blueprint(name, parent):
     return require(tools.create_asset(name, BP_ROOT, unreal.Blueprint, factory), "Failed to create " + name)
 
 
-def configure_enemy(blueprint, profile, capsule=None):
+def configure_enemy(blueprint, profile, native_class, capsule=None):
     cdo = unreal.get_default_object(blueprint.generated_class())
+    # 패턴 수치의 기준은 C++임. BP에 저장된 예전 패턴 대신 C++ 기본값을 복사한 뒤 애니메이션만 몬스터용으로 바꿈
+    native = unreal.get_default_object(require(unreal.load_class(None, native_class), "Missing class " + native_class))
     capsule_component = cdo.get_editor_property("capsule_component")
     if capsule:
         capsule_component.set_capsule_size(capsule[0], capsule[1], False)
@@ -114,11 +116,11 @@ def configure_enemy(blueprint, profile, capsule=None):
     mesh.set_relative_rotation(unreal.Rotator(pitch=0.0, yaw=mesh_yaw(profile.rig, "toe_L", "heel_02_L"), roll=0.0), False, False)
 
     cdo.set_editor_property("locomotion_animation", profile.locomotion)
-    patterns = list(cdo.get_editor_property("attack_patterns"))
+    patterns = [pattern.copy() for pattern in native.get_editor_property("attack_patterns")]
     for pattern in patterns:
         pattern.set_editor_property("animation", profile.retargeted(pattern.get_editor_property("animation")))
     cdo.set_editor_property("attack_patterns", patterns)
-    cdo.set_editor_property("attack_animation", profile.retargeted(cdo.get_editor_property("attack_animation")))
+    cdo.set_editor_property("attack_animation", profile.retargeted(native.get_editor_property("attack_animation")))
     cdo.set_editor_property("death_animation", profile.anim("MM_Death_Front_01"))
     cdo.set_editor_property("death_back_animation", profile.anim("MM_Death_Back_01"))
     cdo.set_editor_property("death_left_animation", profile.anim("MM_Death_Left_01"))
@@ -129,7 +131,8 @@ def configure_enemy(blueprint, profile, capsule=None):
     require(lib.save_loaded_asset(blueprint, only_if_is_dirty=False), "Failed to save " + blueprint.get_name())
     unreal.log("PYW_ENEMY_CONFIGURED {} mesh={} yaw={:.1f} patterns={}".format(
         blueprint.get_name(), profile.mesh.get_name(), mesh.get_editor_property("relative_rotation").yaw,
-        [(str(p.get_editor_property("name")), p.get_editor_property("animation").get_name()) for p in patterns]))
+        [(str(p.get_editor_property("name")), p.get_editor_property("animation").get_name(),
+          round(p.get_editor_property("impact_delay"), 2), round(p.get_editor_property("animation_duration"), 2)) for p in patterns]))
 
 
 def configure_projectile(ranged):
@@ -183,10 +186,10 @@ large_profile = Profile("Large", "LM_")
 melee = require(lib.load_asset(BP_ROOT + "/BP_MeleeEnemy"), "Missing BP_MeleeEnemy")
 ranged = require(lib.load_asset(BP_ROOT + "/BP_RangedEnemy"), "Missing BP_RangedEnemy")
 large = ensure_blueprint("BP_LargeEnemy", "/Script/UT1.BruteEnemyCharacter")
-configure_enemy(melee, small)
-configure_enemy(ranged, small)
+configure_enemy(melee, small, "/Script/UT1.MeleeEnemyCharacter")
+configure_enemy(ranged, small, "/Script/UT1.RangedEnemyCharacter")
 # 대형 메시(약 192cm)가 캡슐 안에 들어오도록 키움. Brute의 1.3배 캡슐 배율은 그대로 유지함
-configure_enemy(large, large_profile, capsule=(42.0, 96.0))
+configure_enemy(large, large_profile, "/Script/UT1.BruteEnemyCharacter", capsule=(42.0, 96.0))
 configure_projectile(ranged)
 place_test_enemies(melee, ranged, large)
 delete_unreferenced_redirectors(redirectors)

@@ -48,6 +48,10 @@ struct FEnemyAttackPattern
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack")
 	TObjectPtr<class UAnimSequence> Animation;
 
+	// 0이면 애니메이션 전체 길이만큼 재생함. 조준 유지 같은 루프 모션은 이 시간만큼만 재생함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
+	float AnimationDuration = 0.0f;
+
 	// 타격 1회(원거리는 투사체 1발)당 피해량임
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
 	float Damage = 10.0f;
