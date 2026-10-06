@@ -55,6 +55,14 @@ float AUT1Entity::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 		return 0.0f;
 	}
 
+	// 무적 중 피해는 체력, 피격 반응 모두 건너뛴다.
+	// 무기 쪽은 이미 "이번 스윙에 맞춘 대상"으로 기록하므로, 무적이 끝난 뒤에
+	// 같은 스윙에 다시 맞지 않는다. 즉 한 번 피한 공격은 끝까지 피한 것이 된다.
+	if (IsInvulnerable())
+	{
+		return 0.0f;
+	}
+
 	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 	if (ActualDamage <= 0.0f)
 	{

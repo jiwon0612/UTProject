@@ -10,6 +10,7 @@ struct FInputActionValue;
 struct FComboStep;
 class UUT1WeaponData;
 class AUT1Weapon;
+class UUT1DodgeComponent;
 
 /**
  * 
@@ -55,6 +56,10 @@ public:
 
 	UFUNCTION()
 	void OnMontageEnd(UAnimMontage* Montage, bool bInterrupted);
+
+	// 재생 중인 콤보 몽타주를 멈추고 콤보 상태를 처음으로 되돌린다.
+	// 무기 교체, 사망, 회피 캔슬처럼 공격을 외부에서 끊어야 할 때 쓴다.
+	void CancelCombo();
 	
 	void RotateToCursor();
 
@@ -94,6 +99,11 @@ private:
 	void ClearEquippedWeapons();
 
 protected:
+	// 회피 거리/시간/무적/쿨다운/몽타주는 BP_Player 의 이 컴포넌트에서 조절한다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<UUT1DodgeComponent> DodgeComponent;
+
+protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<class USpringArmComponent> SpringArm;
 
@@ -102,6 +112,12 @@ protected:
 
 public:
 	void Input_Move(const FInputActionValue& InputValue);
+	void Input_Dodge();
+
+private:
+	// 2D 입력을 카메라 기준 월드 방향으로 바꾼다. 이동과 회피가 같은 기준을 써야
+	// 누른 방향과 구르는 방향이 어긋나지 않는다.
+	FVector GetCameraRelativeDirection(const FVector2D& Input) const;
 
 protected:
 	UPROPERTY(EditAnywhere, Category = Input)
@@ -112,6 +128,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = Input)
 	TObjectPtr<class UInputAction> AttackAction;
+
+	// IA_Dodge (Space). 비어 있으면 회피 입력을 바인딩하지 않는다.
+	UPROPERTY(EditAnywhere, Category = Input)
+	TObjectPtr<class UInputAction> DodgeAction;
 
 protected:
 	UPROPERTY(EditAnywhere, Category = Test)

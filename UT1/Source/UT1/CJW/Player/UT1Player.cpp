@@ -10,6 +10,7 @@
 #include "Animation/AnimInstance.h"
 #include "UT1/CJW/Weapons/UT1WeaponData.h"
 #include "CJW/Weapons/UT1Weapon.h"
+#include "CJW/Combat/UT1DodgeComponent.h"
 #include "Engine/World.h"
 #include "UT1.h"
 
@@ -35,6 +36,8 @@ AUT1Player::AUT1Player()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 500.f, 0.f);
 	bUseControllerRotationYaw = false;
+
+	DodgeComponent = CreateDefaultSubobject<UUT1DodgeComponent>(TEXT("DodgeComponent"));
 }
 
 void AUT1Player::NotifyControllerChanged()
@@ -64,6 +67,16 @@ void AUT1Player::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	{
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this,&AUT1Player::Input_Move);
 		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AUT1Player::ComboAttack);
+
+		if (DodgeAction != nullptr)
+		{
+			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &AUT1Player::Input_Dodge);
+		}
+
+		// 회피 방향은 "지금 누르고 있는 이동 키"로 정한다. Input_Move 는 공격 중에
+		// 일찍 빠져나가므로 거기서 값을 저장할 수 없다. 대신 이동 액션의 현재 값을
+		// 언제든 읽을 수 있도록 값 바인딩을 걸어 둔다.
+		EnhancedInputComponent->BindActionValue(MoveAction);
 	}
 }
 
@@ -80,14 +93,7 @@ void AUT1Player::EquipWeaponData(UUT1WeaponData* NewWeaponData)
 {
 	// 콤보 도중에 무기가 바뀌면 ComboIndex 가 새 무기의 시퀀스를 가리켜
 	// 엉뚱한 단계가 재생된다. 재생 중인 몽타주를 먼저 끊고 상태를 되돌린다.
-	if (CurrentComboMontage != nullptr)
-	{
-		if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
-		{
-			Anim->Montage_Stop(0.1f, CurrentComboMontage);
-		}
-	}
-	ComboReset();
+	CancelCombo();
 
 	ClearEquippedWeapons();
 	CurrentWeaponData = NewWeaponData;
@@ -168,15 +174,10 @@ void AUT1Player::HandleDeath(AActor* Killer)
 	// 콤보 몽타주를 밀어내면 OnMontageEnd 가 bInterrupted 로 들어와
 	// 판정이 켜진 채 남을 수 있다.
 	StopWeaponTrace();
+	CancelCombo();
 
-	if (CurrentComboMontage != nullptr)
-	{
-		if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
-		{
-			Anim->Montage_Stop(0.1f, CurrentComboMontage);
-		}
-	}
-	ComboReset();
+	// 회피 도중 죽으면 이동과 무적을 즉시 끊는다.
+	DodgeComponent->CancelDodge();
 
 	Super::HandleDeath(Killer);
 }
@@ -273,7 +274,8 @@ void AUT1Player::Tick(float DeltaTime)
 
 void AUT1Player::ComboAttack()
 {
-	if (IsDead())
+	// 회피 중 공격 입력은 버린다. 선입력으로 받아 두지는 않는다.
+	if (IsDead() || DodgeComponent->IsDodging())
 	{
 		return;
 	}
@@ -380,6 +382,18 @@ void AUT1Player::ComboReset()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 }
 
+void AUT1Player::CancelCombo()
+{
+	if (CurrentComboMontage != nullptr)
+	{
+		if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			Anim->Montage_Stop(0.1f, CurrentComboMontage);
+		}
+	}
+	ComboReset();
+}
+
 void AUT1Player::OnMontageEnd(UAnimMontage* Montage, bool bInterrupted)
 {
 	if (bInterrupted) return;   // 다음 콤보 몽타주에 밀린 경우. 여기서 처리하지 않는다.
@@ -454,17 +468,43 @@ void AUT1Player::RotateToCursor()
 
 void AUT1Player::Input_Move(const FInputActionValue& InputValue)
 {  
-	if (bIsAttacking || IsDead()) return;
+	if (bIsAttacking || IsDead() || DodgeComponent->IsDodging()) return;
 
 	FVector2D MovementVector = InputValue.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		const FRotator CamYaw(0.f, SpringArm->GetComponentRotation().Yaw, 0.f);
-		const FVector Forward = FRotationMatrix(CamYaw).GetUnitAxis(EAxis::X);
-		const FVector Right = FRotationMatrix(CamYaw).GetUnitAxis(EAxis::Y);
-
-		AddMovementInput(Forward, MovementVector.Y);
-		AddMovementInput(Right, MovementVector.X);
+		AddMovementInput(GetCameraRelativeDirection(MovementVector));
 	}
+}
+
+FVector AUT1Player::GetCameraRelativeDirection(const FVector2D& Input) const
+{
+	const FRotator CamYaw(0.f, SpringArm->GetComponentRotation().Yaw, 0.f);
+	const FRotationMatrix CamMatrix(CamYaw);
+	return CamMatrix.GetUnitAxis(EAxis::X) * Input.Y + CamMatrix.GetUnitAxis(EAxis::Y) * Input.X;
+}
+
+void AUT1Player::Input_Dodge()
+{
+	// 쿨다운 중이면 공격을 끊지 않는다. 회피도 못 하고 공격만 날아가면 억울하다.
+	if (DodgeComponent->CanDodge() == false)
+	{
+		return;
+	}
+
+	FVector Direction = FVector::ZeroVector;
+	if (auto* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
+	{
+		Direction = GetCameraRelativeDirection(EnhancedInputComponent->GetBoundActionValue(MoveAction).Get<FVector2D>());
+	}
+
+	// 공격 캔슬. 판정이 켜진 채 구르지 않도록 콤보를 먼저 정리한다.
+	if (bIsAttacking)
+	{
+		CancelCombo();
+	}
+
+	// 방향이 0 이면 컴포넌트가 바라보는 방향으로 대신 구른다.
+	DodgeComponent->TryDodge(Direction);
 }
