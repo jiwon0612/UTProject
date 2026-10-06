@@ -41,33 +41,27 @@ SOURCES = (
     ANIMS + "/Death/MM_Death_Right_01",
     ANIMS + "/Rifle/HitReact/MM_HitReact_Front_Med_01",
     ANIMS + "/Rifle/HitReact/MM_HitReact_Back_Med_01",
-    # 원거리 시전 자세로 쓰는 조준 모션 (무기 없이 손을 뻗은 모습)
-    ANIMS + "/Pistol/MF_Pistol_Idle_ADS",
-    ANIMS + "/Rifle/MF_Rifle_Idle_ADS",
+    # 원거리 시전 동작: 권총 꺼내기 중 양손을 가슴 앞에 모았다 내미는 구간만 C++ 패턴이 잘라 씀 (무기 없이 재생)
+    ANIMS + "/Pistol/MM_Pistol_Equip",
     # 패턴마다 다른 모션을 주기 위한 검술 모션 (무기 없이 쓰면 맨손 찌르기·휘두르기·내려찍기로 보임)
     HNS_ANIMS + "/Combo_2/Anim_Combo_2_Br_4",
-    HNS_ANIMS + "/Combo_1/Anim_Combo_1_Br_3",
-    HNS_ANIMS + "/Combo_6/Anim_Combo_6_Br_2",
     # 암살자: 빠른 찌르기, 연속 베기, 낮은 돌진 찌르기
     HNS_ANIMS + "/Combo_10/Anim_Combo_10_Br_1",
     HNS_ANIMS + "/Combo_4/Anim_Combo_4_Br_2",
     HNS_ANIMS + "/Combo_4/Anim_Combo_4_Br_1",
-    # 방패병: 방패 밀치기, 2연속 밀치기, 내려치기, 돌진 찌르기
+    # 방패병: 방패 밀치기, 내려치기, 돌진 찌르기 (2연속 밀치기는 MM_Attack_02)
     HNS_ANIMS + "/Combo_5/Anim_Combo_5_Br_1",
-    HNS_ANIMS + "/Combo_8/Anim_Combo_8_Br_2",
     HNS_ANIMS + "/Combo_2/Anim_Combo_2_Br_2",
     HNS_ANIMS + "/Combo_9/Anim_Combo_9_Br_1",
-    # 포격병: 들어 던지기, 연속 투척, 근거리 폭발
-    HNS_ANIMS + "/Combo_3/Anim_Combo_3_Br_1",
-    HNS_ANIMS + "/Combo_7/Anim_Combo_7_Br_3",
+    # 포격병: 근거리 폭발 (포격은 MM_ChargedAttack, 연속 포격은 소총 조준 자세)
     HNS_ANIMS + "/Combo_10/Anim_Combo_10_Br_4",
 )
 
 # 골반이 크게 앞으로 나가는 모션임. 적의 이동은 C++ Lunge가 맡으므로 수평 이동을 지워 제자리 모션으로 씀
-IN_PLACE = {"Anim_Combo_2_Br_4", "Anim_Combo_1_Br_3", "Anim_Combo_6_Br_2",
+IN_PLACE = {"Anim_Combo_2_Br_4",
             "Anim_Combo_10_Br_1", "Anim_Combo_4_Br_2", "Anim_Combo_4_Br_1",
-            "Anim_Combo_5_Br_1", "Anim_Combo_8_Br_2", "Anim_Combo_2_Br_2", "Anim_Combo_9_Br_1",
-            "Anim_Combo_3_Br_1", "Anim_Combo_7_Br_3", "Anim_Combo_10_Br_4"}
+            "Anim_Combo_5_Br_1", "Anim_Combo_2_Br_2", "Anim_Combo_9_Br_1",
+            "Anim_Combo_10_Br_4"}
 
 # Mannequin IK_Mannequin의 체인 이름과 똑같이 지어서 EXACT 자동 매핑이 되게 함.
 # 몬스터는 Rigify 계열이라 spine이 골반, spine_003이 가슴, spine_004/006이 목/머리임.

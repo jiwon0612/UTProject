@@ -19,13 +19,17 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	ReactionTime = 0.7f;
 	PoiseThreshold = 15.0f;
 	StaggerDuration = 0.7f;
+	// 보라색 포탄과 같은 색으로 터짐
+	AreaFlashColor = FLinearColor(1.0f, 0.2f, 1.6f);
 
 	// 포탄은 투사체 대신 '표시된 원에 시간차로 떨어지는 범위 판정'임 (bAreaAtTarget).
-	// LobThrow 1.75s(팔을 들었다가 0.88s에 던짐), Barrage 2.17s(여러 번 휘두름), CloseBlast 0.48s
+	// 제자리에서 도는 검술 모션은 포격과 어울리지 않아 단순한 동작을 씀.
+	// LobThrow는 힘을 모았다 내지르는 모션(1.83s), Barrage는 손을 모았다 내미는 시전 구간, CloseBlast 0.48s
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> LobThrowAnim(
-		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_3/Anim_Combo_3_Br_1"));
+		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"));
+	// 연속 포격은 원거리 시전자와 같은 손 모으기 구간(MM_Pistol_Equip 0.70s~)을 쓰고, 모은 손을 내민 자세로 연달아 쏘아 올림
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> BarrageAnim(
-		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_7/Anim_Combo_7_Br_3"));
+		TEXT("/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Equip"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> CloseBlastAnim(
 		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_10/Anim_Combo_10_Br_4"));
 	AttackAnimation = LobThrowAnim.Object;
@@ -35,9 +39,11 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	FEnemyAttackPattern& Shell = AttackPatterns.AddDefaulted_GetRef();
 	Shell.Name = TEXT("ArtilleryShell");
 	Shell.Animation = LobThrowAnim.Object;
-	Shell.Damage = 9.0f;
+	Shell.Damage = 6.3f;
 	Shell.Cooldown = 1.2f;
 	Shell.ImpactDelay = 1.6f;
+	// 팔을 내지르는 순간(0.75s) 던져 0.85s 동안 포물선으로 날아감
+	Shell.LobLaunchTime = 0.75f;
 	Shell.MinRange = 250.0f;
 	Shell.AreaRadius = 200.0f;
 	Shell.bAreaAtTarget = true;
@@ -48,9 +54,13 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	FEnemyAttackPattern& Barrage = AttackPatterns.AddDefaulted_GetRef();
 	Barrage.Name = TEXT("ArtilleryBarrage");
 	Barrage.Animation = BarrageAnim.Object;
-	Barrage.Damage = 6.0f;
+	Barrage.AnimationStartTime = 0.70f;
+	Barrage.AnimationDuration = 1.5f;
+	Barrage.Damage = 4.2f;
 	Barrage.Cooldown = 1.5f;
 	Barrage.ImpactDelay = 1.4f;
+	// 조준 자세에서 0.3s 간격으로 연달아 쏘아 올림. 각 포탄은 1.0s 날아감
+	Barrage.LobLaunchTime = 0.4f;
 	Barrage.HitCount = 4;
 	Barrage.HitInterval = 0.3f;
 	Barrage.MinRange = 350.0f;
@@ -64,7 +74,7 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	FEnemyAttackPattern& CloseBlast = AttackPatterns.AddDefaulted_GetRef();
 	CloseBlast.Name = TEXT("ArtilleryCloseBlast");
 	CloseBlast.Animation = CloseBlastAnim.Object;
-	CloseBlast.Damage = 4.0f;
+	CloseBlast.Damage = 2.8f;
 	CloseBlast.Cooldown = 0.8f;
 	CloseBlast.ImpactDelay = 0.3f;
 	CloseBlast.MaxRange = 200.0f;

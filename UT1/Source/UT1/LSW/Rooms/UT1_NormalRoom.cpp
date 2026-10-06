@@ -79,6 +79,7 @@ void AUT1_NormalRoom::SpawnEnemies()
 
         if (Enemy)
         {
+            Enemy->SetEnemyLevel(EnemyLevel);
             SpawnedEnemies.Add(Enemy);
         }
     }

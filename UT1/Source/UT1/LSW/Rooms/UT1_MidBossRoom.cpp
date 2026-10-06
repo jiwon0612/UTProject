@@ -54,4 +54,9 @@ void AUT1_MidBossRoom::SpawnMidBoss()
             MidBossSpawnPoint->GetComponentRotation(),
             SpawnParams
         );
+
+    if (SpawnedMidBoss)
+    {
+        SpawnedMidBoss->SetEnemyLevel(EnemyLevel);
+    }
 }

@@ -29,17 +29,9 @@ LARGE_LOOT = {
     "blueprints": SMALL_LOOT["blueprints"],
 }
 
-# 패턴 이름 -> (타격 이펙트, 배율, 끌 이미터). C++ 패턴을 복사한 뒤 에셋 의존 데이터만 여기서 붙임
-PATTERN_EFFECTS = {
-    # 자폭: 폭발 시스템에서 비행용 이미터(Projectile_*)와 발사 고리를 끄고 폭발(Explosion_*)만 씀.
-    # 검은 폭발 연기(Explosion_Smoke*)는 화면 전체를 가려서 끄고, 충격 고리와 불꽃만 남김
-    "BomberSelfDestruct": (VFX_ROOT + "/NS_VFX_Explosion", 1.3,
-                           ["Emitter_LeafRing", "Projectile_Smoke", "Projectile_VFX", "Projectile_Particle001",
-                            "Explosion_Smoke", "Explosion_Smoke001"]),
-}
-# 포격병의 포탄과 근거리 폭발도 같은 폭발만 씀. 배율은 범위 반경(자폭 300 = 1.3배)에 맞춤
-for _name, _scale in (("ArtilleryShell", 0.9), ("ArtilleryBarrage", 0.75), ("ArtilleryCloseBlast", 0.95)):
-    PATTERN_EFFECTS[_name] = (PATTERN_EFFECTS["BomberSelfDestruct"][0], _scale, PATTERN_EFFECTS["BomberSelfDestruct"][2])
+# 패턴 이름 -> (타격 Niagara, 배율, 끌 이미터). C++ 패턴을 복사한 뒤 에셋 의존 데이터만 여기서 붙임.
+# 지금은 비어 있음: 팩 시스템은 이미터 일부만 켜면 그려지지 않아서, 범위 공격의 폭발은 C++ AEnemyHitFlash가 맡음
+PATTERN_EFFECTS = {}
 
 lib = unreal.EditorAssetLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -189,40 +181,158 @@ def configure_enemy(blueprint, profile, native_class, capsule=None, loot=SMALL_L
           round(p.get_editor_property("impact_delay"), 2), round(p.get_editor_property("animation_duration"), 2)) for p in patterns]))
 
 
-def ensure_core_material():
-    """투사체 판정 위치를 보여 주는 단순 발광 머티리얼임. 팩 머티리얼은 Niagara 파티클 색을 입력으로 받아서 정적 메시에 쓰지 않음."""
-    folder, name = ROOT + "/Materials", "M_EnemyProjectileCore"
-    path = folder + "/" + name
-    material = lib.load_asset(path) if lib.does_asset_exist(path) else require(
-        tools.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew()), "Failed to create " + name)
+NOISE_ROOT = ROOT + "/ProjectileVFX/Textures/"
+# NS_VFX_Evil의 보라색 계열임. 1을 넘는 HDR 값이라 블룸으로 빛나 보임
+PURPLE = unreal.LinearColor(1.0, 0.12, 1.7, 1.0)
+HOT = unreal.LinearColor(1.0, 0.55, 1.2, 1.0)
+
+
+class MaterialGraph:
+    """머티리얼 노드를 코드로 만드는 작은 도우미임. 팩 머티리얼은 Niagara 파티클 색을 입력으로 받아서
+    정적 메시에 그대로 쓰면 검게 나오므로, 투사체 메시용 머티리얼은 여기서 직접 만듦."""
+
     editing = unreal.MaterialEditingLibrary
-    editing.delete_all_material_expressions(material)
-    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
-    color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
-    # 1을 넘는 HDR 값이라 블룸으로 빛나 보임. NS_VFX_Evil의 보라색 계열에 맞춤
-    color.set_editor_property("constant", unreal.LinearColor(4.0, 0.5, 6.0, 1.0))
-    editing.connect_material_property(color, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    editing.recompile_material(material)
-    require(lib.save_loaded_asset(material, only_if_is_dirty=False), "Failed to save " + name)
-    return material
+
+    def __init__(self, name, blend=unreal.BlendMode.BLEND_OPAQUE, two_sided=False):
+        folder = ROOT + "/Materials"
+        path = folder + "/" + name
+        self.name = name
+        self.material = lib.load_asset(path) if lib.does_asset_exist(path) else require(
+            tools.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew()), "Failed to create " + name)
+        self.editing.delete_all_material_expressions(self.material)
+        self.material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+        self.material.set_editor_property("blend_mode", blend)
+        self.material.set_editor_property("two_sided", two_sided)
+        self.row = 0
+
+    def node(self, cls, **props):
+        expression = self.editing.create_material_expression(self.material, getattr(unreal, cls), -600, self.row)
+        self.row += 110
+        for key, value in props.items():
+            expression.set_editor_property(key, value)
+        return expression
+
+    def link(self, source, target, target_input="", source_output=""):
+        require(self.editing.connect_material_expressions(source, source_output, target, target_input),
+                "{}: {}.{} -> {}.{}".format(self.name, source.get_name(), source_output, target.get_name(), target_input))
+        return target
+
+    def binary(self, cls, a, b):
+        node = self.node(cls)
+        self.link(a, node, "A")
+        self.link(b, node, "B")
+        return node
+
+    def mul(self, *inputs):
+        result = inputs[0]
+        for other in inputs[1:]:
+            result = self.binary("MaterialExpressionMultiply", result, other)
+        return result
+
+    def add(self, a, b):
+        return self.binary("MaterialExpressionAdd", a, b)
+
+    def scalar(self, value):
+        return self.node("MaterialExpressionConstant", r=value)
+
+    def color(self, color, intensity):
+        return self.node("MaterialExpressionConstant3Vector", constant=unreal.LinearColor(
+            color.r * intensity, color.g * intensity, color.b * intensity, 1.0))
+
+    def unary(self, cls, source, **props):
+        return self.link(source, self.node(cls, **props))
+
+    def power(self, base, exponent):
+        return self.unary("MaterialExpressionPower", base, const_exponent=exponent)
+
+    def fresnel(self, exponent):
+        return self.node("MaterialExpressionFresnel", exponent=exponent, base_reflect_fraction=0.0)
+
+    def pulse(self, period, amount):
+        """1 ± amount 사이를 period초 주기로 오가는 값임. 코어가 살아 있는 듯 깜빡이게 함."""
+        wave = self.unary("MaterialExpressionSine", self.node("MaterialExpressionTime"), period=period)
+        return self.add(self.mul(wave, self.scalar(amount)), self.scalar(1.0))
+
+    def scrolling_noise(self, texture_name, tiling, speed):
+        """원뿔 UV를 따라 흐르는 노이즈임. 단색 꼬리가 줄무늬처럼 흘러가 보여 속도감이 생김."""
+        texture = require(lib.load_asset(NOISE_ROOT + texture_name), "Missing " + texture_name)
+        coords = self.node("MaterialExpressionTextureCoordinate", u_tiling=tiling[0], v_tiling=tiling[1])
+        panner = self.link(coords, self.node("MaterialExpressionPanner", speed_x=speed[0], speed_y=speed[1]), "Coordinate")
+        compression = texture.get_editor_property("compression_settings")
+        srgb = texture.get_editor_property("srgb")
+        if compression == unreal.TextureCompressionSettings.TC_GRAYSCALE:
+            sampler = unreal.MaterialSamplerType.SAMPLERTYPE_GRAYSCALE if srgb else unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE
+        elif compression == unreal.TextureCompressionSettings.TC_MASKS:
+            sampler = unreal.MaterialSamplerType.SAMPLERTYPE_MASKS
+        else:
+            sampler = unreal.MaterialSamplerType.SAMPLERTYPE_COLOR if srgb else unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
+        sample = self.link(panner, self.node("MaterialExpressionTextureSample", texture=texture, sampler_type=sampler), "UVs")
+        return self.mask(sample, r=True)
+
+    def mask(self, source, source_output="", r=False, g=False, b=False):
+        node = self.node("MaterialExpressionComponentMask", r=r, g=g, b=b, a=False)
+        return self.link(source, node, "", source_output)
+
+    def cone_fade(self):
+        """원뿔 밑면(코어 쪽) 1 -> 꼭짓점(꼬리 끝) 0인 값임. 엔진 원뿔은 +Z가 꼭짓점이라 로컬 Z를 높이로 나눔."""
+        height = self.mask(self.node("MaterialExpressionLocalPosition"), b=True)
+        bounds = self.node("MaterialExpressionObjectLocalBounds")
+        bottom = self.mask(bounds, "Min", b=True)
+        full = self.binary("MaterialExpressionSubtract", self.mask(bounds, "Max", b=True), bottom)
+        along = self.binary("MaterialExpressionDivide", self.binary("MaterialExpressionSubtract", height, bottom), full)
+        return self.unary("MaterialExpressionSaturate", self.unary("MaterialExpressionOneMinus", along))
+
+    def finish(self, emissive):
+        self.editing.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        self.editing.recompile_material(self.material)
+        require(lib.save_loaded_asset(self.material, only_if_is_dirty=False), "Failed to save " + self.name)
+        unreal.log("PYW_MATERIAL_BUILT {} nodes={}".format(self.name, self.row // 110))
+        return self.material
+
+
+def ensure_core_material():
+    """판정 위치를 보여 주는 코어임. 가운데는 하얗게 달아오르고 가장자리는 보라색이며, 빠르게 맥동함."""
+    graph = MaterialGraph("M_EnemyProjectileCore")
+    rim = graph.node("MaterialExpressionLinearInterpolate")
+    graph.link(graph.color(HOT, 10.0), rim, "A")
+    graph.link(graph.color(PURPLE, 6.0), rim, "B")
+    graph.link(graph.fresnel(2.0), rim, "Alpha")
+    return graph.finish(graph.mul(rim, graph.pulse(0.18, 0.25)))
+
+
+def ensure_halo_material():
+    """코어를 감싸는 부드러운 빛무리임. 정면(프레넬 0)이 가장 밝고 테두리로 갈수록 사라져 구체 윤곽이 보이지 않음."""
+    graph = MaterialGraph("M_EnemyProjectileHalo", unreal.BlendMode.BLEND_ADDITIVE)
+    soft = graph.power(graph.unary("MaterialExpressionOneMinus", graph.fresnel(1.0)), 3.0)
+    return graph.finish(graph.mul(graph.color(PURPLE, 2.2), soft, graph.pulse(0.18, 0.2)))
 
 
 def ensure_tail_material():
-    """원뿔 꼬리용 가산 머티리얼임. 코어보다 어둡게 해서 판정 위치(코어)가 먼저 눈에 들어오게 함."""
-    folder, name = ROOT + "/Materials", "M_EnemyProjectileTail"
-    path = folder + "/" + name
-    material = lib.load_asset(path) if lib.does_asset_exist(path) else require(
-        tools.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew()), "Failed to create " + name)
-    editing = unreal.MaterialEditingLibrary
-    editing.delete_all_material_expressions(material)
-    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
-    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
-    color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
-    color.set_editor_property("constant", unreal.LinearColor(1.2, 0.15, 1.8, 1.0))
-    editing.connect_material_property(color, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    editing.recompile_material(material)
-    require(lib.save_loaded_asset(material, only_if_is_dirty=False), "Failed to save " + name)
-    return material
+    """넓은 바깥 꼬리(라인)임. 코어 쪽이 밝고 끝으로 갈수록 사라지며, 노이즈가 뒤로 흘러 불꽃처럼 일렁임."""
+    graph = MaterialGraph("M_EnemyProjectileTail", unreal.BlendMode.BLEND_ADDITIVE, two_sided=True)
+    fade = graph.power(graph.cone_fade(), 1.4)
+    flicker = graph.add(graph.mul(graph.scrolling_noise("T_VFX_Noise_3", (1.0, 1.5), (0.0, -2.5)), graph.scalar(1.4)),
+                        graph.scalar(0.3))
+    return graph.finish(graph.mul(graph.color(PURPLE, 3.0), fade, flicker))
+
+
+def ensure_inner_tail_material():
+    """바깥 꼬리 속을 지나는 가늘고 하얀 선임. 더 빨리 흘러서 진행 방향이 또렷하게 읽힘."""
+    graph = MaterialGraph("M_EnemyProjectileInnerTail", unreal.BlendMode.BLEND_ADDITIVE, two_sided=True)
+    fade = graph.power(graph.cone_fade(), 2.2)
+    streak = graph.add(graph.mul(graph.scrolling_noise("T_SmearNoise005", (1.0, 1.0), (0.0, -4.0)), graph.scalar(1.2)),
+                       graph.scalar(0.5))
+    return graph.finish(graph.mul(graph.color(HOT, 4.0), fade, streak))
+
+
+def ensure_hit_flash_material():
+    """공격이 맞은 자리의 섬광(AEnemyHitFlash)용 가산 머티리얼임. 색·밝기는 Color 파라미터로 런타임에 바꾸고,
+    가운데가 밝고 테두리로 사라져 빛이 번지는 모양이 됨."""
+    graph = MaterialGraph("M_EnemyHitFlash", unreal.BlendMode.BLEND_ADDITIVE)
+    color = graph.node("MaterialExpressionVectorParameter", parameter_name="Color",
+                       default_value=unreal.LinearColor(1.0, 0.5, 0.2, 1.0))
+    soft = graph.power(graph.unary("MaterialExpressionOneMinus", graph.fresnel(1.0)), 2.0)
+    return graph.finish(graph.mul(color, soft))
 
 
 def configure_projectile(ranged):
@@ -232,14 +342,25 @@ def configure_projectile(ranged):
     # 그래서 비행 비주얼은 액터 컴포넌트인 발광 코어와 원뿔 꼬리로 만들고, 팩 이펙트는 제자리에서 터지는 폭발에만 씀
     cdo.set_editor_property("trail_effect", None)
     cdo.set_editor_property("trail_disabled_emitters", [])
+    # 라인은 두 겹임: 넓고 은은한 바깥 꼬리 + 가늘고 긴 하얀 선. 둘 다 노이즈가 뒤로 흘러 속도감을 줌
     cdo.set_editor_property("tail_material", ensure_tail_material())
-    cdo.set_editor_property("tail_length", 120.0)
-    cdo.set_editor_property("impact_effect", require(lib.load_asset(VFX_ROOT + "/NS_VFX_Explosion"), "Missing NS_VFX_Explosion"))
-    # 폭발 시스템에도 비행용 이미터(Projectile_*)와 발사 고리가 들어 있어서 폭발(Explosion_*)만 남김
-    cdo.set_editor_property("impact_disabled_emitters", [
-        "Emitter_LeafRing", "Projectile_Smoke", "Projectile_VFX", "Projectile_Particle001"])
-    cdo.set_editor_property("impact_effect_scale", unreal.Vector(0.7, 0.7, 0.7))
+    cdo.set_editor_property("tail_length", 140.0)
+    cdo.set_editor_property("tail_width_scale", 2.0)
+    cdo.set_editor_property("inner_tail_material", ensure_inner_tail_material())
+    cdo.set_editor_property("inner_tail_length_scale", 1.8)
+    cdo.set_editor_property("inner_tail_width_scale", 0.4)
     cdo.set_editor_property("core_material", ensure_core_material())
+    cdo.set_editor_property("halo_material", ensure_halo_material())
+    cdo.set_editor_property("halo_scale", 2.6)
+    cdo.set_editor_property("glow_intensity", 40.0)
+    # 팩 시스템은 이미터끼리 이벤트로 엮여 있어서 일부만 켜면 아무것도 그려지지 않음(PIE에서 확인).
+    # 그래서 발사·명중 Niagara는 쓰지 않고, 명중은 C++ AEnemyHitFlash(M_EnemyHitFlash) 섬광이 맡음
+    ensure_hit_flash_material()
+    cdo.set_editor_property("launch_effect", None)
+    cdo.set_editor_property("launch_disabled_emitters", [])
+    cdo.set_editor_property("impact_effect", None)
+    cdo.set_editor_property("impact_disabled_emitters", [])
+    cdo.set_editor_property("impact_flash_radius", 40.0)
     unreal.BlueprintEditorLibrary.compile_blueprint(projectile)
     require(lib.save_loaded_asset(projectile, only_if_is_dirty=False), "Failed to save BP_EnemyProjectile")
     # 네이티브 클래스 대신 VFX가 지정된 BP 투사체를 쏘도록 바꿈
@@ -308,6 +429,11 @@ configure_enemy(bomber, small, "/Script/UT1.BomberEnemyCharacter")
 configure_enemy(guardian, small, "/Script/UT1.GuardianEnemyCharacter")
 configure_enemy(artillery, small, "/Script/UT1.ArtilleryEnemyCharacter")
 configure_projectile(ranged)
+# 포격병은 같은 투사체 BP를 포물선 포탄(보여 주기 전용)으로 던짐
+artillery_cdo = unreal.get_default_object(artillery.generated_class())
+artillery_cdo.set_editor_property("lob_projectile_class", lib.load_asset(BP_ROOT + "/BP_EnemyProjectile").generated_class())
+unreal.BlueprintEditorLibrary.compile_blueprint(artillery)
+require(lib.save_loaded_asset(artillery, only_if_is_dirty=False), "Failed to save " + artillery.get_name())
 place_test_enemies(melee, ranged, large, assassin, bomber, guardian, artillery)
 delete_unreferenced_redirectors(redirectors)
 unreal.log("PYW_MONSTER_ENEMIES_SUCCESS")

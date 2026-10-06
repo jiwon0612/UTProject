@@ -26,7 +26,7 @@ ABomberEnemyCharacter::ABomberEnemyCharacter()
 	FEnemyAttackPattern& SelfDestruct = AttackPatterns.AddDefaulted_GetRef();
 	SelfDestruct.Name = TEXT("BomberSelfDestruct");
 	SelfDestruct.Animation = ChargedAttack.Object;
-	SelfDestruct.Damage = 22.5f;
+	SelfDestruct.Damage = 15.7f;
 	SelfDestruct.Cooldown = 1.0f;
 	SelfDestruct.ImpactDelay = 1.1f;
 	SelfDestruct.AreaRadius = 300.0f;

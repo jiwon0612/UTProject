@@ -32,7 +32,7 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 	FEnemyAttackPattern& Slash = AttackPatterns.AddDefaulted_GetRef();
 	Slash.Name = TEXT("MeleeSlash");
 	Slash.Animation = Attack01.Object;
-	Slash.Damage = 9.0f;
+	Slash.Damage = 6.3f;
 	Slash.Cooldown = 0.5f;
 	Slash.ImpactDelay = 0.35f;
 	Slash.Weight = 3.0f;
@@ -40,7 +40,7 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 	FEnemyAttackPattern& DoubleStrike = AttackPatterns.AddDefaulted_GetRef();
 	DoubleStrike.Name = TEXT("MeleeDoubleStrike");
 	DoubleStrike.Animation = Attack02.Object;
-	DoubleStrike.Damage = 5.5f;
+	DoubleStrike.Damage = 3.8f;
 	DoubleStrike.Cooldown = 0.7f;
 	DoubleStrike.ImpactDelay = 0.3f;
 	DoubleStrike.HitCount = 2;
@@ -50,7 +50,7 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 	FEnemyAttackPattern& HeavySmash = AttackPatterns.AddDefaulted_GetRef();
 	HeavySmash.Name = TEXT("MeleeHeavySmash");
 	HeavySmash.Animation = Attack03.Object;
-	HeavySmash.Damage = 17.0f;
+	HeavySmash.Damage = 11.9f;
 	HeavySmash.Cooldown = 0.9f;
 	HeavySmash.ImpactDelay = 0.65f;
 	HeavySmash.KnockbackStrength = 420.0f;
@@ -61,7 +61,7 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 	FEnemyAttackPattern& LungeSlash = AttackPatterns.AddDefaulted_GetRef();
 	LungeSlash.Name = TEXT("MeleeLungeSlash");
 	LungeSlash.Animation = LungeThrust.Object;
-	LungeSlash.Damage = 8.0f;
+	LungeSlash.Damage = 5.6f;
 	LungeSlash.Cooldown = 0.6f;
 	LungeSlash.ImpactDelay = 0.5f;
 	LungeSlash.MinRange = 150.0f;

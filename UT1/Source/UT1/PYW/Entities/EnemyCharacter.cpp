@@ -14,6 +14,8 @@
 #include "CJW/Crafting/UT1LootDropComponent.h"
 #include "PYW/AI/EnemyAIController.h"
 #include "PYW/Combat/EnemyEffects.h"
+#include "PYW/Combat/EnemyHitFlash.h"
+#include "PYW/Weapons/EnemyProjectile.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {
@@ -73,6 +75,8 @@ void AEnemyCharacter::MigrateLegacyAttackAnimations()
 
 void AEnemyCharacter::BeginPlay()
 {
+	// Entity::BeginPlay가 CurrentHealth를 MaxHealth로 채우므로, 그 전에 레벨 배율을 적용함
+	ApplyLevelScaling();
 	Super::BeginPlay();
 	MigrateLegacyAttackAnimations();
 	if (AttackPatterns.IsEmpty())
@@ -92,6 +96,33 @@ void AEnemyCharacter::BeginPlay()
 			UGameplayStatics::ApplyDamage(this, MaxHealth, nullptr, this, UDamageType::StaticClass());
 		}), TestDeathDelay, false);
 	}
+}
+
+void AEnemyCharacter::SetEnemyLevel(int32 NewLevel)
+{
+	EnemyLevel = FMath::Max(1, NewLevel);
+	ApplyLevelScaling();
+}
+
+void AEnemyCharacter::ApplyLevelScaling()
+{
+	EnemyLevel = FMath::Max(1, EnemyLevel);
+	if (BaseMaxHealth <= 0.0f)
+	{
+		BaseMaxHealth = MaxHealth;
+		BasePoiseThreshold = PoiseThreshold;
+	}
+	const float HealthRatio = MaxHealth > 0.0f ? CurrentHealth / MaxHealth : 1.0f;
+	MaxHealth = BaseMaxHealth * GetLevelHealthMultiplier();
+	PoiseThreshold = BasePoiseThreshold * GetLevelHealthMultiplier();
+	// BeginPlay 전에는 Entity가 체력을 채우므로 건드리지 않음. 스폰 뒤 레벨을 바꾸면 체력 비율을 유지함
+	if (HasActorBegunPlay() && !bIsDead)
+	{
+		CurrentHealth = MaxHealth * HealthRatio;
+		OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	}
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_LEVEL Actor=%s Level=%d MaxHealth=%.1f DamageMultiplier=%.2f"),
+		*GetName(), EnemyLevel, MaxHealth, GetLevelDamageMultiplier());
 }
 
 void AEnemyCharacter::HandleDamaged(float ActualDamage, AActor* DamageCauser)
@@ -193,13 +224,18 @@ void AEnemyCharacter::PlayLocomotionAnimation()
 	bPlayingActionAnimation = false;
 }
 
-void AEnemyCharacter::PlayActionAnimation(UAnimSequence* Animation, float MaxDuration)
+void AEnemyCharacter::PlayActionAnimation(UAnimSequence* Animation, float MaxDuration, float StartTime)
 {
 	if (!Animation) return;
 	GetMesh()->PlayAnimation(Animation, false);
+	const float Start = FMath::Clamp(StartTime, 0.0f, Animation->GetPlayLength());
+	if (Start > 0.0f)
+	{
+		if (UAnimSingleNodeInstance* Instance = GetMesh()->GetSingleNodeInstance()) Instance->SetPosition(Start, false);
+	}
 	bPlayingActionAnimation = true;
-	float Duration = Animation->GetPlayLength();
-	if (MaxDuration > 0.0f) Duration = FMath::Min(Duration, MaxDuration);
+	// 루프가 아닌 클립은 끝나면 마지막 자세에 멈춰 있으므로, 지정한 시간이 더 길면 그 자세를 유지함
+	const float Duration = MaxDuration > 0.0f ? MaxDuration : Animation->GetPlayLength() - Start;
 	ActionAnimationEndTime = GetWorld()->GetTimeSeconds() + Duration;
 }
 
@@ -222,6 +258,15 @@ void AEnemyCharacter::Tick(float DeltaSeconds)
 				? FMath::RadiansToDegrees(FMath::Atan2(LocalVelocity.Y, LocalVelocity.X)) : 0.0f;
 			Animation->SetBlendSpacePosition(FVector(Direction, Speed, 0.0f));
 		}
+	}
+}
+
+void AEnemyCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+	if (!bIsDead && IsAttackInProgress())
+	{
+		GetCharacterMovement()->StopMovementImmediately();
 	}
 }
 
@@ -408,8 +453,9 @@ float AEnemyCharacter::GetAttackRecoveryTime() const
 {
 	const float LastHitTime = ActivePattern.ImpactDelay
 		+ (FMath::Max(ActivePattern.HitCount, 1) - 1) * FMath::Max(ActivePattern.HitInterval, 0.01f);
-	float AnimationLength = ActivePattern.Animation ? ActivePattern.Animation->GetPlayLength() : 0.0f;
-	if (ActivePattern.AnimationDuration > 0.0f) AnimationLength = FMath::Min(AnimationLength, ActivePattern.AnimationDuration);
+	float AnimationLength = ActivePattern.Animation
+		? FMath::Max(0.0f, ActivePattern.Animation->GetPlayLength() - ActivePattern.AnimationStartTime) : 0.0f;
+	if (ActivePattern.AnimationDuration > 0.0f) AnimationLength = ActivePattern.AnimationDuration;
 	float Cooldown = FMath::Max(ActivePattern.Cooldown, 0.0f) * (bEnraged ? EnrageCooldownMultiplier : 1.0f);
 	Cooldown *= FMath::FRandRange(1.0f - AttackCooldownVariance, 1.0f + AttackCooldownVariance);
 	return FMath::Max(AnimationLength, LastHitTime) + Cooldown;
@@ -454,6 +500,11 @@ bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& 
 	}
 
 	UGameplayStatics::ApplyDamage(Target, Pattern.Damage, GetController(), this, UDamageType::StaticClass());
+	// 범위 공격은 터지는 자리에 큰 섬광을 따로 보여 주므로, 단일 타격만 맞은 몸통에 작은 섬광을 냄
+	if (Pattern.AreaRadius <= 0.0f && HitFlashRadius > 0.0f)
+	{
+		AEnemyHitFlash::Spawn(GetWorld(), Target->GetActorLocation() + FVector(0.0f, 0.0f, 20.0f), HitFlashColor, HitFlashRadius);
+	}
 	if ((Pattern.KnockbackStrength > 0.0f || Pattern.KnockbackLift > 0.0f) && IsValid(Target))
 	{
 		if (ACharacter* TargetCharacter = Cast<ACharacter>(Target))
@@ -481,6 +532,13 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_ATTACK_IMPACT Actor=%s Pattern=%s Hit=%d/%d Target=%s Result=%s"),
 		*GetName(), *ActiveAttackName, HitIndex + 1, ActivePattern.HitCount, *GetNameSafe(Target), bHit ? TEXT("Hit") : TEXT("Miss"));
 
+	// 범위 공격은 빗나가도 터진 자리가 보여야 함. 포탄은 표시된 원 중심, 그 밖은 자기 발밑에서 범위 크기만큼 터짐
+	if (ActivePattern.AreaRadius > 0.0f)
+	{
+		const FVector FlashCenter = GetAreaCenter(ActivePattern.bAreaAtTarget ? HitIndex : INDEX_NONE) + FVector(0.0f, 0.0f, 30.0f);
+		AEnemyHitFlash::Spawn(GetWorld(), FlashCenter, AreaFlashColor, ActivePattern.AreaRadius * 0.5f);
+	}
+
 	// 범위 공격은 빗나가도 폭발이 보여야 하고, 단일 타격은 맞았을 때만 대상 위치에 보여 줌
 	if (ActivePattern.ImpactEffect && (ActivePattern.AreaRadius > 0.0f || bHit))
 	{
@@ -502,10 +560,6 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 
 	if (ActivePattern.bConsumesSelf)
 	{
-		if (bShowAttackDebug && ActivePattern.AreaRadius > 0.0f)
-		{
-			DrawDebugSphere(GetWorld(), GetActorLocation(), ActivePattern.AreaRadius, 16, FColor::Orange, false, 0.6f);
-		}
 		UE_LOG(LogTemp, Display, TEXT("ENEMY_SELF_DESTRUCT Actor=%s Hit=%s"), *GetName(), bHit ? TEXT("true") : TEXT("false"));
 		HandleDeath(this);
 		// 몸이 폭발로 사라진 것으로 보여 쓰러지는 모션 대신 바로 숨김. 폭발은 패턴의 ImpactEffect가 맡음
@@ -539,10 +593,48 @@ void AEnemyCharacter::PerformLunge(TWeakObjectPtr<AActor> WeakTarget)
 		*GetName(), *ActiveAttackName, HorizontalSpeed, ActivePattern.LungeLift);
 }
 
+FVector AEnemyCharacter::GetProjectileOrigin() const
+{
+	const USkeletalMeshComponent* MeshComponent = GetMesh();
+	if (MeshComponent && !ProjectileSocket.IsNone() && MeshComponent->DoesSocketExist(ProjectileSocket))
+	{
+		return MeshComponent->GetSocketLocation(ProjectileSocket);
+	}
+	return GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+}
+
+void AEnemyCharacter::LaunchLob(int32 HitIndex)
+{
+	if (bIsDead || !LobProjectileClass || !ActiveAreaCenters.IsValidIndex(HitIndex)) return;
+	const float FlightTime = ActivePattern.ImpactDelay - ActivePattern.LobLaunchTime;
+	if (FlightTime <= 0.05f) return;
+
+	// 던지는 손에서 출발함. 등가속도 운동 D = V*T + 0.5*G*T^2 를 V에 대해 풀어 초기 속도를 구함
+	const FVector Start = GetProjectileOrigin();
+	const FVector Gravity(0.0f, 0.0f, GetWorld()->GetGravityZ());
+	const FVector Velocity = (ActiveAreaCenters[HitIndex] - Start - 0.5f * Gravity * FlightTime * FlightTime) / FlightTime;
+
+	const FTransform SpawnTransform(Velocity.Rotation(), Start);
+	AEnemyProjectile* Shell = GetWorld()->SpawnActorDeferred<AEnemyProjectile>(
+		LobProjectileClass, SpawnTransform, this, this, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Shell) return;
+	Shell->Speed = Velocity.Size();
+	Shell->GravityScale = 1.0f;
+	Shell->bVisualOnly = true;
+	// 판정 시각에 사라지고, 그 자리 폭발은 패턴의 ImpactEffect가 맡음
+	Shell->InitialLifeSpan = FlightTime;
+	Shell->FinishSpawning(SpawnTransform);
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_LOB Actor=%s Pattern=%s Hit=%d Flight=%.2f Speed=%.0f"),
+		*GetName(), *ActiveAttackName, HitIndex + 1, FlightTime, Velocity.Size());
+}
+
 void AEnemyCharacter::CancelActiveAttack()
 {
 	GetWorldTimerManager().ClearTimer(AttackImpactTimer);
 	GetWorldTimerManager().ClearTimer(LungeTimer);
+	// 경직으로 끊긴 공격은 아직 던지지 않은 포탄도 취소함 (판정도 함께 취소되므로)
+	for (FTimerHandle& Timer : LobTimers) GetWorldTimerManager().ClearTimer(Timer);
+	LobTimers.Reset();
 	bPlayingActionAnimation = false;
 }
 
@@ -590,6 +682,8 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	const double Now = GetWorld()->GetTimeSeconds();
 	ActivePattern = AttackPatterns[PatternIndex];
 	if (!ActivePattern.Animation) ActivePattern.Animation = AttackAnimation;
+	// 근접·범위·투사체 모두 ActivePattern.Damage를 쓰므로 여기서 한 번만 레벨 배율을 곱함
+	ActivePattern.Damage *= GetLevelDamageMultiplier();
 	ActiveAttackName = ActivePattern.Name.ToString();
 	LastPatternIndex = PatternIndex;
 	if (PatternReadyTimes.Num() != AttackPatterns.Num()) PatternReadyTimes.SetNumZeroed(AttackPatterns.Num());
@@ -601,9 +695,10 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	NextAttackTime = Now + GetAttackRecoveryTime();
 	if (UAnimSequence* Animation = ActivePattern.Animation)
 	{
-		PlayActionAnimation(Animation, ActivePattern.AnimationDuration);
-		UE_LOG(LogTemp, Display, TEXT("ENEMY_ANIMATION Attack=%s Duration=%.2f"), *Animation->GetName(),
-			ActivePattern.AnimationDuration > 0.0f ? FMath::Min(ActivePattern.AnimationDuration, Animation->GetPlayLength()) : Animation->GetPlayLength());
+		PlayActionAnimation(Animation, ActivePattern.AnimationDuration, ActivePattern.AnimationStartTime);
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_ANIMATION Attack=%s Start=%.2f Duration=%.2f"), *Animation->GetName(),
+			ActivePattern.AnimationStartTime, ActivePattern.AnimationDuration > 0.0f
+				? ActivePattern.AnimationDuration : Animation->GetPlayLength() - ActivePattern.AnimationStartTime);
 	}
 	BP_OnAttack(Target);
 
@@ -618,6 +713,18 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 			// 첫 발은 대상 발밑에 떨어지고, 나머지는 주변에 흩어져 피할 방향을 고르게 함
 			const FVector2D Scatter = HitIndex == 0 ? FVector2D::ZeroVector : FMath::RandPointInCircle(ActivePattern.AreaScatter);
 			ActiveAreaCenters.Add(TargetFeet + FVector(Scatter.X, Scatter.Y, 0.0f));
+		}
+	}
+
+	LobTimers.Reset();
+	if (LobProjectileClass && ActivePattern.LobLaunchTime > 0.0f && !ActiveAreaCenters.IsEmpty())
+	{
+		// 포탄마다 판정 간격(HitInterval)만큼 늦게 던져서 모든 포탄의 비행 시간이 같게 함
+		for (int32 HitIndex = 0; HitIndex < ActiveAreaCenters.Num(); ++HitIndex)
+		{
+			FTimerHandle& Timer = LobTimers.AddDefaulted_GetRef();
+			GetWorldTimerManager().SetTimer(Timer, FTimerDelegate::CreateUObject(this, &AEnemyCharacter::LaunchLob, HitIndex),
+				ActivePattern.LobLaunchTime + HitIndex * FMath::Max(ActivePattern.HitInterval, 0.01f), false);
 		}
 	}
 

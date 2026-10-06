@@ -43,11 +43,21 @@ namespace
 		return Blackboard ? Cast<AActor>(Blackboard->GetValueAsObject(AEnemyAIController::TargetActorKey)) : nullptr;
 	}
 
-	// 추격을 멈춰도 되는 시점임. 바로 공격할 수 있거나, 쿨다운 중이지만 거리 조절로 넘어갈 만큼 가까울 때임
+	// 공격하지 않고 거리 조절을 할 때임. 보통은 쿨다운 동안이지만, Kite 적은 너무 가까운데 지금 거리에서
+	// 쓸 패턴이 없으면(근거리 기술 쿨다운 중) 쿨다운이 끝났어도 물러남. 아니면 사거리 안이라 추격도 못 하고 멈춰 섬
+	bool NeedsReposition(const AEnemyCharacter* Enemy, const AActor* Target)
+	{
+		if (!Enemy->IsInCombatBand(Target)) return false;
+		if (Enemy->GetAttackCooldownRemaining() > 0.0f) return true;
+		return Enemy->CombatMovement == EEnemyCombatMovement::Kite
+			&& Enemy->GetTargetGap(Target) < Enemy->RetreatDistance
+			&& !Enemy->CanStartAttack(Target);
+	}
+
+	// 추격을 멈춰도 되는 시점임. 바로 공격할 수 있거나, 거리 조절로 넘어갈 만큼 가까울 때임
 	bool IsChaseComplete(const AEnemyCharacter* Enemy, const AActor* Target)
 	{
-		return Enemy->CanStartAttack(Target)
-			|| (Enemy->GetAttackCooldownRemaining() > 0.0f && Enemy->IsInCombatBand(Target));
+		return Enemy->CanStartAttack(Target) || NeedsReposition(Enemy, Target);
 	}
 
 	EPathFollowingRequestResult::Type MoveToNavigable(AAIController* Controller, const FVector& Destination)
@@ -74,8 +84,26 @@ namespace
 		if (Enemy->CombatMovement == EEnemyCombatMovement::Kite && Gap < Enemy->RetreatDistance)
 		{
 			Enemy->SetAIState(EEnemyAIState::Retreat);
-			MoveToNavigable(Controller, EnemyLocation + FromTarget * (Enemy->RetreatDistance - Gap + 200.0f));
 			Memory->RepathTime = 0.6f;
+			// 바로 뒤가 바닥 끝이나 벽이면 목표가 내비메시 밖이라 경로 요청이 실패해서 멈춰 섬.
+			// 정반대 방향부터 점점 비스듬하게, 그다음 짧은 거리로 갈 수 있는 곳을 찾음
+			UNavigationSystemV1* Navigation = FNavigationSystem::GetCurrent<UNavigationSystemV1>(Controller->GetWorld());
+			const float FullDistance = Enemy->RetreatDistance - Gap + 200.0f;
+			static const float Angles[] = { 0.0f, 40.0f, -40.0f, 80.0f, -80.0f, 120.0f, -120.0f };
+			for (const float DistanceScale : { 1.0f, 0.5f })
+			{
+				for (const float Angle : Angles)
+				{
+					const FVector Goal = EnemyLocation
+						+ FromTarget.RotateAngleAxis(Angle, FVector::UpVector) * FullDistance * DistanceScale;
+					FNavLocation Projected;
+					if (!Navigation || !Navigation->ProjectPointToNavigation(Goal, Projected, FVector(50.0f, 50.0f, 300.0f))) continue;
+					if (Controller->MoveToLocation(Projected.Location, 30.0f, false, true, false, true) != EPathFollowingRequestResult::Failed)
+					{
+						return;
+					}
+				}
+			}
 			return;
 		}
 
@@ -240,7 +268,7 @@ bool UEnemyBTDecorator_InCombatBand::CalculateRawConditionValue(UBehaviorTreeCom
 {
 	const AEnemyCharacter* Enemy = GetEnemy(OwnerComp);
 	const AActor* Target = GetTarget(OwnerComp);
-	return Enemy && IsValid(Target) && Enemy->GetAttackCooldownRemaining() > 0.0f && Enemy->IsInCombatBand(Target);
+	return Enemy && IsValid(Target) && NeedsReposition(Enemy, Target);
 }
 
 UEnemyBTDecorator_HasLastKnownLocation::UEnemyBTDecorator_HasLastKnownLocation()
@@ -482,7 +510,7 @@ EBTNodeResult::Type UEnemyBTTask_Reposition::ExecuteTask(UBehaviorTreeComponent&
 	{
 		return EBTNodeResult::Failed;
 	}
-	if (Enemy->GetAttackCooldownRemaining() <= 0.0f)
+	if (!NeedsReposition(Enemy, Target))
 	{
 		return EBTNodeResult::Succeeded;
 	}
@@ -513,7 +541,7 @@ void UEnemyBTTask_Reposition::TickTask(UBehaviorTreeComponent& OwnerComp, uint8*
 		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
 		return;
 	}
-	if (Enemy->GetAttackCooldownRemaining() <= 0.0f)
+	if (!NeedsReposition(Enemy, Target))
 	{
 		Controller->StopMovement();
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);

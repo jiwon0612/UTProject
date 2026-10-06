@@ -48,7 +48,11 @@ struct FEnemyAttackPattern
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack")
 	TObjectPtr<class UAnimSequence> Animation;
 
-	// 0이면 애니메이션 전체 길이만큼 재생함. 조준 유지 같은 루프 모션은 이 시간만큼만 재생함
+	// 애니메이션을 이 시간부터 재생함. 긴 클립에서 필요한 구간(예: 손을 모으는 부분)만 잘라 쓸 때 사용함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
+	float AnimationStartTime = 0.0f;
+
+	// 0이면 시작 지점부터 클립 끝까지 재생함. 0보다 크면 이 시간만큼 재생하고, 클립이 먼저 끝나면 마지막 자세를 유지함
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
 	float AnimationDuration = 0.0f;
 
@@ -118,6 +122,11 @@ struct FEnemyAttackPattern
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0", EditCondition = "bAreaAtTarget"))
 	float AreaScatter = 0.0f;
 
+	// bAreaAtTarget 전용. 0보다 크면 공격 시작 후 이 시간에 포탄을 던져, 판정 시각에 표시된 원으로 포물선을 그리며 떨어지게 함.
+	// 포탄은 보여 주기용이고 피해는 원 범위 판정이 맡음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0", EditCondition = "bAreaAtTarget"))
+	float LobLaunchTime = 0.0f;
+
 	// 원거리 전용. 타격 1회에 동시에 발사하는 투사체 수임. AreaRadius가 있으면 무시함
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "1"))
 	int32 ProjectilesPerHit = 1;
@@ -161,9 +170,34 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void Destroyed() override;
 
+	/** 돌진 공격이 착지하면 그 자리에 멈춤. 지면 마찰로 미끄러지며 남은 모션을 재생하지 않게 함 */
+	virtual void Landed(const FHitResult& Hit) override;
+
 	// 죽을 때 재료와 무기 설계도를 떨굼. 드랍 규칙은 CJW 컴포넌트가 맡고, 적 종류별 드랍표는 BP에서 채움
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Loot")
 	TObjectPtr<class UUT1LootDropComponent> LootDrop;
+
+	// 1레벨이 C++/BP에 적힌 기본 수치임. 스폰하는 쪽(방, 웨이브)이 진행도에 맞춰 올림
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Level", meta = (ClampMin = "1", ExposeOnSpawn = "true"))
+	int32 EnemyLevel = 1;
+
+	// 레벨 1 오를 때마다 기본 체력에 더하는 비율임 (0.2 = +20%). 경직 내성도 같은 비율로 올려 경직 빈도를 유지함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Level", meta = (ClampMin = "0.0"))
+	float HealthPerLevel = 0.2f;
+
+	// 레벨 1 오를 때마다 공격 피해에 더하는 비율임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Level", meta = (ClampMin = "0.0"))
+	float DamagePerLevel = 0.12f;
+
+	/** 스폰한 뒤에도 바꿀 수 있음. 현재 체력 비율을 유지한 채 최대 체력을 다시 계산함 */
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Level")
+	void SetEnemyLevel(int32 NewLevel);
+
+	UFUNCTION(BlueprintPure, Category = "Enemy|Level")
+	float GetLevelHealthMultiplier() const { return 1.0f + HealthPerLevel * (EnemyLevel - 1); }
+
+	UFUNCTION(BlueprintPure, Category = "Enemy|Level")
+	float GetLevelDamageMultiplier() const { return 1.0f + DamagePerLevel * (EnemyLevel - 1); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
 	TObjectPtr<class UBlendSpace> LocomotionAnimation;
@@ -174,6 +208,28 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (TitleProperty = "Name"))
 	TArray<FEnemyAttackPattern> AttackPatterns;
+
+	// 근접 공격이 맞았을 때 대상 몸통에서 터지는 섬광의 색과 크기임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Effect")
+	FLinearColor HitFlashColor = FLinearColor(1.0f, 0.55f, 0.25f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Effect", meta = (ClampMin = "0.0"))
+	float HitFlashRadius = 35.0f;
+
+	// 범위 공격(자폭, 내려찍기, 포탄)이 터지는 자리의 섬광 색임. 크기는 범위 반경을 따름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Effect")
+	FLinearColor AreaFlashColor = FLinearColor(1.0f, 0.45f, 0.15f);
+
+	// 투사체·포탄이 나가는 본(소켓)임. 몬스터 메시는 오른손이 hand_r임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack")
+	FName ProjectileSocket = TEXT("hand_r");
+
+	/** 투사체가 나갈 위치임. 소켓이 없으면 가슴 높이를 씀 */
+	FVector GetProjectileOrigin() const;
+
+	// LobLaunchTime이 있는 패턴이 던지는 포탄임. 비어 있으면 포탄 없이 원만 표시함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack")
+	TSubclassOf<class AEnemyProjectile> LobProjectileClass;
 
 	// 예전 BP에 저장된 값을 읽기 위해서만 남겨 둠. 로드 시 AttackPatterns로 옮기고 비움
 	UPROPERTY()
@@ -332,6 +388,11 @@ public:
 	float GetMovementSpeedForState(EEnemyAIState State) const;
 
 private:
+	// 레벨 배율을 곱하기 전 1레벨 수치임. 레벨을 여러 번 바꿔도 배율이 겹쳐 곱해지지 않게 함
+	float BaseMaxHealth = 0.0f;
+	float BasePoiseThreshold = 0.0f;
+	void ApplyLevelScaling();
+
 	double NextAttackTime = 0.0;
 	double ActionAnimationEndTime = 0.0;
 	double StaggerEndTime = 0.0;
@@ -344,6 +405,10 @@ private:
 	TArray<double> PatternReadyTimes;
 	FTimerHandle AttackImpactTimer;
 	FTimerHandle LungeTimer;
+	TArray<FTimerHandle> LobTimers;
+
+	/** HitIndex번째 포탄을 손 위치에서 던짐. 남은 시간 안에 그 원의 중심에 떨어지는 초기 속도를 역산함 */
+	void LaunchLob(int32 HitIndex);
 
 	// 공격 도중 AttackPatterns가 바뀌어도 진행 중인 공격이 흔들리지 않도록 복사본을 씀
 	UPROPERTY(Transient)
@@ -353,7 +418,7 @@ private:
 	TArray<FVector> ActiveAreaCenters;
 
 	void PlayLocomotionAnimation();
-	void PlayActionAnimation(class UAnimSequence* Animation, float MaxDuration = 0.0f);
+	void PlayActionAnimation(class UAnimSequence* Animation, float MaxDuration = 0.0f, float StartTime = 0.0f);
 	bool IsPatternUsable(int32 PatternIndex, float Gap) const;
 	int32 ChooseAttackPattern(const AActor* Target) const;
 	float GetAttackRecoveryTime() const;

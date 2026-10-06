@@ -18,60 +18,60 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	ReactionTime = 0.6f;
 	ProjectileClass = AEnemyProjectile::StaticClass();
 
-	// 맨손 시전 모션이 없어서 권총/소총 조준 자세를 무기 없이 써서 손을 뻗어 쏘는 모습으로 보이게 함.
-	// 조준 자세는 8~9초 루프라 AnimationDuration으로 발사 직후까지만 재생함
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> OneHandAimAsset(
-		TEXT("/Game/Characters/Mannequins/Anims/Pistol/MF_Pistol_Idle_ADS"));
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> TwoHandAimAsset(
-		TEXT("/Game/Characters/Mannequins/Anims/Rifle/MF_Rifle_Idle_ADS"));
-	// 몸을 낮췄다가 팔을 크게 휘두르는 검술 모션임. 부채꼴 일제 사격의 손짓으로 씀 (0.8s 부근에서 팔을 가장 멀리 뻗음)
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> SweepAsset(
-		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_1/Anim_Combo_1_Br_3"));
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> ChargeReleaseAsset(
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"));
-	AttackAnimation = OneHandAimAsset.Object;
+	// 총을 쏘는 자세 대신 양손을 가슴 앞 중앙에 모았다가 앞으로 밀어 내는 시전 동작을 씀.
+	// 맨손 시전 클립이 없어서 권총 꺼내기(MM_Pistol_Equip) 중 0.70~1.40s 구간만 잘라 씀:
+	// 허리 양옆의 손이 0.95s에 가슴 앞에서 모이고(간격 9cm), 1.10s 무렵 앞으로 밀려 나감 (구간 시작 기준 0.25s / 0.40s)
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> CastAsset(
+		TEXT("/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Equip"));
+	constexpr float CastStart = 0.70f;
+	constexpr float CastRelease = 0.40f;
+	AttackAnimation = CastAsset.Object;
 	AttackPatterns.Reset();
 
 	FEnemyAttackPattern& MagicBolt = AttackPatterns.AddDefaulted_GetRef();
 	MagicBolt.Name = TEXT("RangedMagicBolt");
-	MagicBolt.Animation = OneHandAimAsset.Object;
-	MagicBolt.AnimationDuration = 0.75f;
-	MagicBolt.Damage = 6.0f;
+	MagicBolt.Animation = CastAsset.Object;
+	MagicBolt.AnimationStartTime = CastStart;
+	MagicBolt.Damage = 4.2f;
 	MagicBolt.Cooldown = 0.6f;
-	MagicBolt.ImpactDelay = 0.35f;
+	MagicBolt.ImpactDelay = CastRelease;
 	MagicBolt.Weight = 3.0f;
 
-	// 두 손 조준을 유지한 채 연사함. 마지막 발사 후 0.3초 더 자세를 유지함
+	// 손을 모은 채 앞으로 민 자세를 유지하며 연사함. 마지막 발사 후 0.25초 더 자세를 유지함
 	FEnemyAttackPattern& TripleBurst = AttackPatterns.AddDefaulted_GetRef();
 	TripleBurst.Name = TEXT("RangedTripleBurst");
-	TripleBurst.Animation = TwoHandAimAsset.Object;
-	TripleBurst.AnimationDuration = 1.15f;
-	TripleBurst.Damage = 3.0f;
+	TripleBurst.Animation = CastAsset.Object;
+	TripleBurst.AnimationStartTime = CastStart;
+	TripleBurst.AnimationDuration = 1.0f;
+	TripleBurst.Damage = 2.1f;
 	TripleBurst.Cooldown = 0.8f;
-	TripleBurst.ImpactDelay = 0.5f;
+	TripleBurst.ImpactDelay = CastRelease;
 	TripleBurst.HitCount = 3;
 	TripleBurst.HitInterval = 0.18f;
 	TripleBurst.Weight = 2.0f;
 
-	// 팔을 크게 휘두르는 순간 부채꼴로 일제 사격을 함
+	// 손을 밀어 내는 순간 부채꼴로 일제 사격을 함
 	FEnemyAttackPattern& SpreadVolley = AttackPatterns.AddDefaulted_GetRef();
 	SpreadVolley.Name = TEXT("RangedSpreadVolley");
-	SpreadVolley.Animation = SweepAsset.Object;
-	SpreadVolley.Damage = 2.5f;
+	SpreadVolley.Animation = CastAsset.Object;
+	SpreadVolley.AnimationStartTime = CastStart;
+	SpreadVolley.AnimationDuration = 0.8f;
+	SpreadVolley.Damage = 1.8f;
 	SpreadVolley.Cooldown = 1.0f;
-	SpreadVolley.ImpactDelay = 0.8f;
+	SpreadVolley.ImpactDelay = CastRelease + 0.05f;
 	SpreadVolley.ProjectilesPerHit = 5;
 	SpreadVolley.SpreadAngle = 24.0f;
 	SpreadVolley.PatternCooldown = 3.0f;
 	SpreadVolley.Weight = 1.5f;
 
-	// 붙어 오는 대상을 밀쳐 내고 다시 거리를 벌리기 위한 근거리 폭발임. 힘을 모았다 터뜨리는 모션의 방출 구간에 맞춤
+	// 붙어 오는 대상을 밀쳐 내고 다시 거리를 벌리기 위한 근거리 폭발임. 모은 손을 밀어 내는 순간 터짐
 	FEnemyAttackPattern& RepelNova = AttackPatterns.AddDefaulted_GetRef();
 	RepelNova.Name = TEXT("RangedRepelNova");
-	RepelNova.Animation = ChargeReleaseAsset.Object;
-	RepelNova.Damage = 4.0f;
+	RepelNova.Animation = CastAsset.Object;
+	RepelNova.AnimationStartTime = CastStart;
+	RepelNova.Damage = 2.8f;
 	RepelNova.Cooldown = 0.6f;
-	RepelNova.ImpactDelay = 0.7f;
+	RepelNova.ImpactDelay = CastRelease;
 	RepelNova.MaxRange = 180.0f;
 	RepelNova.AreaRadius = 240.0f;
 	RepelNova.KnockbackStrength = 650.0f;
@@ -86,9 +86,10 @@ bool ARangedEnemyCharacter::SpawnProjectileAtTarget(AActor* Target, float Damage
 	if (!IsValid(Target) || !ProjectileClass || bIsDead) return false;
 
 	const FVector AimPoint = Target->GetActorLocation() + FVector(0.0f, 0.0f, 40.0f);
-	const FVector LaunchOrigin = GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+	const FVector LaunchOrigin = GetProjectileOrigin();
 	const FVector Direction = (AimPoint - LaunchOrigin).GetSafeNormal().RotateAngleAxis(YawOffsetDegrees, FVector::UpVector);
-	const FTransform SpawnTransform(Direction.Rotation(), LaunchOrigin + Direction * 70.0f);
+	// 손끝보다 조금 앞에서 생성해 팔·몸 메시와 겹쳐 보이지 않게 함
+	const FTransform SpawnTransform(Direction.Rotation(), LaunchOrigin + Direction * 25.0f);
 	AEnemyProjectile* Projectile = GetWorld()->SpawnActorDeferred<AEnemyProjectile>(
 		ProjectileClass, SpawnTransform, this, this, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Projectile) return false;

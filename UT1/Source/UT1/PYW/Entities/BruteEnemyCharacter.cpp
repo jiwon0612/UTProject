@@ -29,16 +29,17 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> ChargedAttack(
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_ChargedAttack"));
-	// 뛰어올라 내려찍는 검술 모션임. 수평 이동은 Lunge가 맡으므로 setup에서 인플레이스로 바꿔 씀
+	// 도약 강타는 Lunge가 몸을 띄우므로 모션은 단순한 내려치기(MM_Attack_02, 1.00s)를 씀.
+	// 공중제비를 도는 검술 모션은 너무 화려해서 뺌
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> JumpSlam(
-		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_6/Anim_Combo_6_Br_2"));
+		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02"));
 	AttackAnimation = Attack03.Object;
 	AttackPatterns.Reset();
 
 	FEnemyAttackPattern& Smash = AttackPatterns.AddDefaulted_GetRef();
 	Smash.Name = TEXT("BruteSmash");
 	Smash.Animation = Attack03.Object;
-	Smash.Damage = 15.0f;
+	Smash.Damage = 10.5f;
 	Smash.Cooldown = 0.9f;
 	Smash.ImpactDelay = 0.7f;
 	Smash.KnockbackStrength = 450.0f;
@@ -50,7 +51,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& GroundSlam = AttackPatterns.AddDefaulted_GetRef();
 	GroundSlam.Name = TEXT("BruteGroundSlam");
 	GroundSlam.Animation = ChargedAttack.Object;
-	GroundSlam.Damage = 12.0f;
+	GroundSlam.Damage = 8.4f;
 	GroundSlam.Cooldown = 1.2f;
 	GroundSlam.ImpactDelay = 0.95f;
 	GroundSlam.MaxRange = 200.0f;
@@ -65,7 +66,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& Charge = AttackPatterns.AddDefaulted_GetRef();
 	Charge.Name = TEXT("BruteCharge");
 	Charge.Animation = Attack01.Object;
-	Charge.Damage = 13.0f;
+	Charge.Damage = 9.1f;
 	Charge.Cooldown = 1.0f;
 	Charge.ImpactDelay = 0.85f;
 	Charge.MinRange = 250.0f;
@@ -82,14 +83,15 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	FEnemyAttackPattern& LeapSlam = AttackPatterns.AddDefaulted_GetRef();
 	LeapSlam.Name = TEXT("BruteLeapSlam");
 	LeapSlam.Animation = JumpSlam.Object;
-	LeapSlam.Damage = 16.0f;
+	LeapSlam.Damage = 11.2f;
 	LeapSlam.Cooldown = 1.0f;
-	LeapSlam.ImpactDelay = 1.35f;
+	// 0.15s에 뛰어 약 0.6s 체공 후 착지하는 순간(0.8s) 판정함
+	LeapSlam.ImpactDelay = 0.8f;
 	LeapSlam.MinRange = 150.0f;
 	LeapSlam.MaxRange = 700.0f;
-	LeapSlam.LungeDelay = 0.35f;
+	LeapSlam.LungeDelay = 0.15f;
 	LeapSlam.LungeSpeed = 1400.0f;
-	LeapSlam.LungeLift = 480.0f;
+	LeapSlam.LungeLift = 300.0f;
 	LeapSlam.AreaRadius = 260.0f;
 	LeapSlam.KnockbackStrength = 500.0f;
 	LeapSlam.KnockbackLift = 220.0f;

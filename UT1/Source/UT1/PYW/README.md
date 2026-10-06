@@ -75,14 +75,32 @@ down-weighted. `Cooldown` is rest time after the attack finishes, jittered by
 `AttackCooldownVariance`. Patterns can also lunge (`LungeDelay`/`LungeSpeed`/
 `LungeLift`, speed is capped so the enemy lands at the target), hit an area
 (`AreaRadius`; with `bAreaAtTarget` the circle is fixed at the target's feet when the
-attack starts, and `AreaScatter` spreads later hits around it), hit several times (`HitCount`), fire several projectiles
+attack starts, and `AreaScatter` spreads later hits around it; `LobLaunchTime` throws a
+visual-only `LobProjectileClass` shell whose launch velocity is solved so it lands in
+the circle exactly at the hit time), hit several times (`HitCount`), fire several projectiles
 (`ProjectilesPerHit`/`SpreadAngle`), knock back, or consume the attacker.
+
+An attack that has started always plays to the end; only stagger cancels it.
+Enemies stand still while attacking, and a lunge stops dead when it lands
+(`Landed`) instead of sliding through the rest of the motion.
 
 Damage resolves after each pattern's `ImpactDelay`. Melee re-checks range and
 a frontal `StrikeHalfAngle` arc at impact, so backing off or sidestepping during
 the wind-up avoids the hit. With `bShowAttackDebug`, area attacks draw their
 landing circle during the wind-up and state changes ("!", stagger, enrage,
 pattern name) are drawn above the enemy.
+
+# Level
+
+`EnemyLevel` (1 = the values written in C++/BP) scales an enemy: each level adds
+`HealthPerLevel` (20%) to max health and poise threshold, and `DamagePerLevel` (12%)
+to attack damage. The damage multiplier is applied once when a pattern is copied
+into `ActivePattern`, so melee, area and projectile hits all follow it.
+`SetEnemyLevel` can be called after spawning and keeps the current health ratio.
+
+LSW rooms drive it: `AUT1_RoomManager` sets `AUT1_RoomBase::EnemyLevel` from the
+room ID before `SetupRoom` (every `RoomsPerEnemyLevel` rooms = +1, default 3), and
+the normal/mid-boss rooms call `SetEnemyLevel` on what they spawn.
 
 # Loot
 
@@ -126,21 +144,28 @@ Content/PYW/
   retargeted `SM_`/`LM_` clip with the same name, so C++ stays the single
   source of tuning.
 - Every pattern of an enemy uses a different motion. Besides the Mannequin
-  clips, three hackNSlash sword clips from CJW (read-only) are retargeted from
-  their own `SKM_Manny_Simple`: `Anim_Combo_2_Br_4` (melee lunge thrust),
-  `Anim_Combo_1_Br_3` (ranged sweep for the spread volley) and
-  `Anim_Combo_6_Br_2` (brute leap slam). Their pelvis travels far, while the
+  clips, hackNSlash sword clips from CJW (read-only) are retargeted from their
+  own `SKM_Manny_Simple` (list in `SOURCES`). Their pelvis travels far, while the
   C++ lunge already moves the actor, so `IN_PLACE` clips keep the pelvis X/Y at
-  the first frame (vertical motion such as the jump is kept).
+  the first frame (vertical motion is kept).
+- Motions stay plain on purpose. Sword clips that spin the whole body (measured
+  as large accumulated pelvis yaw, e.g. `Anim_Combo_3_Br_1`, `Anim_Combo_7_Br_3`,
+  `Anim_Combo_6_Br_2`) read as a jump-spin rather than an attack, so the artillery
+  shell/barrage, guardian double bash and brute leap slam use Mannequin clips
+  (`MM_ChargedAttack`, rifle aim pose, `MM_Attack_02`) instead.
 - The retargeter copies source root motion onto the monster `Root` (Mannequin
   `MM_Attack_01` moves it ~1.4m forward). Enemies move only through character
   movement, so every clip gets its `Root` locked to the reference pose;
   otherwise the mesh snaps back when an attack ends. The setup fails if any
   clip still has root drift.
-- There is no unarmed cast clip, so ranged attacks use the pistol/rifle aim
-  poses without a weapon (arms pushed forward). These are long loops, so
-  `FEnemyAttackPattern::AnimationDuration` plays them only until just after the
-  last shot. Repel Nova uses `MM_ChargedAttack` (charge, then release).
+- There is no unarmed cast clip, and gun aim poses read as shooting, so ranged
+  attacks (and the artillery barrage) cut the 0.70-1.40s window out of
+  `MM_Pistol_Equip`: the hands come together in front of the chest at 0.95s and
+  push forward around 1.10s, which reads as a calm two-hand cast without the
+  weapon. `AnimationStartTime` picks the window start, and `AnimationDuration`
+  longer than the remaining clip holds the final pose (used while bursts fire).
+- Projectiles and lob shells leave from `ProjectileSocket` (`hand_r` on both
+  monster meshes) via `GetProjectileOrigin`, so they come out of the aiming hand.
 - Hit reactions are retargeted rifle HitReact clips, so the arms briefly take a
   rifle-holding shape. Replace them when unarmed hit clips are available.
 
@@ -154,11 +179,32 @@ Run order after building UT1Editor (both scripts are re-runnable):
 The ProjectileVFX systems are self-contained projectiles: the head particle has
 its own velocity, drag and collision, so attaching them to the actor makes the
 effect fly apart from the real projectile. The flight visual is therefore made
-of actor components only: a shadowless glowing core (`M_EnemyProjectileCore`) at
-the collision size and an additive cone tail (`M_EnemyProjectileTail`,
-`TailLength`) pointing back along the path. `NS_VFX_Explosion` is still used for
-the impact, which plays in place; `ImpactDisabledEmitters` keeps only its
-`Explosion_*` emitters.
+of actor components only, so it can never drift from the hit sphere:
+
+- Core (`M_EnemyProjectileCore`): collision-sized sphere, white-hot center to a
+  purple Fresnel rim, pulsing.
+- Halo (`M_EnemyProjectileHalo`, `HaloScale`): larger additive sphere that fades
+  toward its silhouette, so it reads as soft glow instead of a ball.
+- Line, two cones pointing back along the path. Both fade from the core to the tip
+  using local position over object bounds, and scroll a noise texture backwards:
+  the wide purple outer tail (`M_EnemyProjectileTail`, `TailLength`,
+  `TailWidthScale`) and a thin, longer white streak (`M_EnemyProjectileInnerTail`,
+  `InnerTailLengthScale`/`InnerTailWidthScale`).
+- Glow: shadowless point light that tints the floor under the projectile.
+
+The materials are generated as node graphs by `setup_monster_enemies.py`
+(`MaterialGraph`), because the pack materials read Niagara particle colour and
+render black on static meshes.
+
+Hit feedback is `Combat/EnemyHitFlash` (`AEnemyHitFlash::Spawn`): a soft glowing
+sphere, a ring (`SM_Torus`) and a point light that grow and fade over 0.25s,
+tinted through `M_EnemyHitFlash`'s `Color` parameter. It fires on projectile
+impact (projectile `GlowColor`, larger when a pawn is hit), on a landed melee
+strike at the target's body (`HitFlashColor`/`HitFlashRadius`), and where an area
+attack goes off (`AreaFlashColor`, size from `AreaRadius`). The ProjectileVFX pack
+systems are not used for this: their emitters are chained through events, so a
+system with any emitter disabled draws nothing (checked in PIE), and with all
+emitters enabled it launches its own flying projectile.
 
 Spawning actors from Python crashes under `-nullrhi`; run the second script
 with `-RenderOffscreen`.

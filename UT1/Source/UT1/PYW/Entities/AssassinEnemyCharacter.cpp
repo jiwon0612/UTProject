@@ -34,7 +34,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 	FEnemyAttackPattern& QuickStab = AttackPatterns.AddDefaulted_GetRef();
 	QuickStab.Name = TEXT("AssassinQuickStab");
 	QuickStab.Animation = QuickThrust.Object;
-	QuickStab.Damage = 4.5f;
+	QuickStab.Damage = 3.2f;
 	QuickStab.Cooldown = 0.35f;
 	QuickStab.ImpactDelay = 0.22f;
 	QuickStab.Weight = 3.0f;
@@ -42,7 +42,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 	FEnemyAttackPattern& Flurry = AttackPatterns.AddDefaulted_GetRef();
 	Flurry.Name = TEXT("AssassinFlurry");
 	Flurry.Animation = SpinCuts.Object;
-	Flurry.Damage = 3.0f;
+	Flurry.Damage = 2.1f;
 	Flurry.Cooldown = 0.6f;
 	Flurry.ImpactDelay = 0.25f;
 	Flurry.HitCount = 3;
@@ -53,7 +53,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 	FEnemyAttackPattern& LungeStab = AttackPatterns.AddDefaulted_GetRef();
 	LungeStab.Name = TEXT("AssassinLungeStab");
 	LungeStab.Animation = LowLunge.Object;
-	LungeStab.Damage = 8.0f;
+	LungeStab.Damage = 5.6f;
 	LungeStab.Cooldown = 0.5f;
 	LungeStab.ImpactDelay = 0.5f;
 	LungeStab.MinRange = 180.0f;
