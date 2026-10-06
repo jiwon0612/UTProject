@@ -25,38 +25,4 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Portal")
     TObjectPtr<USphereComponent> InteractRange;
-
-    bool IsPlayerInRange() const
-    {
-        UWorld* World = GetWorld();
-
-        if (!World)
-        {
-            return false;
-        }
-
-        APlayerController* PC =
-            World->GetFirstPlayerController();
-
-        if (!PC)
-        {
-            return false;
-        }
-
-        APawn* PlayerPawn =
-            PC->GetPawn();
-
-        if (!PlayerPawn)
-        {
-            return false;
-        }
-
-        const float Distance =
-            FVector::Dist(
-                GetActorLocation(),
-                PlayerPawn->GetActorLocation()
-            );
-
-        return Distance <= 200.f;
-    }
 };

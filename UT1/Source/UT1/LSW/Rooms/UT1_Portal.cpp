@@ -2,7 +2,6 @@
 #include "LSW/Rooms/UT1_RoomManager.h"
 #include "CJW/Player/UT1Player.h"
 #include "Components/SphereComponent.h"
-#include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 
 AUT1_Portal::AUT1_Portal()
@@ -17,7 +16,7 @@ AUT1_Portal::AUT1_Portal()
 
 void AUT1_Portal::Interact_Implementation(AUT1Player* Interactor)
 {
-    if (Interactor == nullptr || !IsPlayerInRange())
+    if (Interactor == nullptr)
     {
         return;
     }

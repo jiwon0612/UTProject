@@ -71,4 +71,8 @@ public:
     // 이 방에서 스폰하는 적의 레벨. RoomManager가 SetupRoom 전에 방 진행도로 채운다.
     UPROPERTY(VisibleInstanceOnly, BlueprintReadWrite, Category = "Room")
     int32 EnemyLevel = 1;
+
+    // 클리어한 일반 방 재입장 시 방이 적에게 전달하는 난이도 배율.
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadWrite, Category = "Room")
+    float EnemyDifficultyMultiplier = 1.0f;
 };
