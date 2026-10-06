@@ -71,7 +71,8 @@ void AUT1Player::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	if (EnhancedInputComponent)
 	{
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this,&AUT1Player::Input_Move);
-		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AUT1Player::ComboAttack);
+		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AUT1Player::Input_AttackPressed);
+		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AUT1Player::Input_AttackHeld);
 
 		if (InteractAction != nullptr)
 		{
@@ -365,6 +366,37 @@ void AUT1Player::Tick(float DeltaTime)
 	{
 		AdvanceCombo();
 	}
+}
+
+void AUT1Player::Input_AttackPressed()
+{
+	AttackPressedTime = GetWorld()->GetTimeSeconds();
+	ComboAttack();
+}
+
+void AUT1Player::Input_AttackHeld()
+{
+	// 짧은 클릭은 Started 한 번으로 끝낸다. 기준 시간을 넘겨 누르고 있을 때만 이어 준다.
+	if (GetWorld()->GetTimeSeconds() - AttackPressedTime < HoldAttackThreshold)
+	{
+		return;
+	}
+
+	// 이미 다음 타가 예약돼 있으면 Tick 이 윈도우에서 발동시킨다. 다시 넣을 필요 없다.
+	if (bComboQueued)
+	{
+		return;
+	}
+
+	if (bIsAttacking == false && bRepeatComboWhileHeld == false)
+	{
+		return;
+	}
+
+	// 연타와 똑같은 경로를 탄다. 윈도우 전이면 예약, 윈도우 안이면 즉시 진행,
+	// 윈도우가 지났거나 마지막 단계면 그냥 버려진다. 꾹 누르기용 규칙을 따로 두지 않아
+	// 연타와 꾹 누르기의 결과가 항상 같다.
+	ComboAttack();
 }
 
 void AUT1Player::ComboAttack()

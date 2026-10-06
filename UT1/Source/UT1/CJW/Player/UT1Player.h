@@ -140,6 +140,24 @@ public:
 	void Input_Interact();
 	void Input_Dodge();
 
+	// 공격 버튼: 누른 순간(Started)과 누르고 있는 동안(Triggered, 매 프레임).
+	void Input_AttackPressed();
+	void Input_AttackHeld();
+
+protected:
+	// 꾹 누르고 있으면 콤보 마지막 타 뒤에 1타부터 다시 시작한다.
+	// 끄면 꾹 누르기는 한 콤보를 끝까지 잇는 데까지만 동작한다.
+	UPROPERTY(EditAnywhere, Category = "Combat|Hold Attack")
+	bool bRepeatComboWhileHeld = true;
+
+	// 이 시간 이상 누르고 있어야 "꾹 누르기"로 본다. Triggered 는 누른 첫 프레임에도
+	// 발생하므로, 기준이 없으면 한 번 클릭만 해도 다음 타가 예약돼 버린다.
+	UPROPERTY(EditAnywhere, Category = "Combat|Hold Attack", meta = (ClampMin = "0.0"))
+	float HoldAttackThreshold = 0.2f;
+
+private:
+	float AttackPressedTime = 0.0f;
+
 private:
 	// 2D 입력을 카메라 기준 월드 방향으로 바꾼다. 이동과 회피가 같은 기준을 써야
 	// 누른 방향과 구르는 방향이 어긋나지 않는다.
