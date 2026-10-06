@@ -45,9 +45,8 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "HUD|Death", meta = (ClampMin = "0.0"))
 	float DeathScreenDelay = 2.0f;
 
-	// [다시 시작] 버튼이 부른다.
-	// TODO: 재시작 방식(레벨 다시 열기 / 기지 귀환 / 리스폰)이 정해지면 여기를 채운다.
-	//       런 흐름 담당(GameMode 나 런 매니저)이 생기면 그쪽 함수를 부르도록 옮긴다.
+	// [다시 시작] 버튼이 부른다. 현재 레벨을 다시 연다.
+	// 런 흐름 담당(GameMode 나 런 매니저)이 생기면 그쪽 함수를 부르도록 옮긴다.
 	UFUNCTION()
 	void RestartRun();
 

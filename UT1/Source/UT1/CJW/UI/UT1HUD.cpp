@@ -7,6 +7,7 @@
 #include "CJW/Player/UT1Player.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "UT1.h"
 
 AUT1HUD::AUT1HUD()
@@ -145,6 +146,11 @@ void AUT1HUD::ShowDeathScreen()
 
 void AUT1HUD::RestartRun()
 {
-	// 재시작 방식은 아직 정하지 않았다. 버튼 연결이 살아 있는지만 로그로 확인한다.
-	UE_LOG(LogUT1, Log, TEXT("[HUD] 다시 시작 요청 - 아직 구현되지 않았습니다."));
+	// 지금 레벨을 처음부터 다시 연다. 월드가 통째로 새로 만들어지므로 플레이어,
+	// 런 인벤토리, 적, 던전 생성이 모두 초기 상태로 돌아간다 ("사망하면 런을 잃는다").
+	// 런 사이에 남겨야 할 것(메타 진행)이 생기면 GameInstance 나 SaveGame 에 옮겨야 한다.
+	// PIE 에서도 맞는 이름이 나오도록 "UEDPIE_0_" 같은 접두사는 떼고 받는다.
+	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
+	UE_LOG(LogUT1, Log, TEXT("[HUD] 다시 시작: %s 레벨을 다시 엽니다."), *LevelName);
+	UGameplayStatics::OpenLevel(this, FName(*LevelName));
 }
