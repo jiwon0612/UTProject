@@ -135,11 +135,38 @@ def configure_enemy(blueprint, profile, native_class, capsule=None):
           round(p.get_editor_property("impact_delay"), 2), round(p.get_editor_property("animation_duration"), 2)) for p in patterns]))
 
 
+def ensure_core_material():
+    """투사체 판정 위치를 보여 주는 단순 발광 머티리얼임. 팩 머티리얼은 Niagara 파티클 색을 입력으로 받아서 정적 메시에 쓰지 않음."""
+    folder, name = ROOT + "/Materials", "M_EnemyProjectileCore"
+    path = folder + "/" + name
+    material = lib.load_asset(path) if lib.does_asset_exist(path) else require(
+        tools.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew()), "Failed to create " + name)
+    editing = unreal.MaterialEditingLibrary
+    editing.delete_all_material_expressions(material)
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
+    # 1을 넘는 HDR 값이라 블룸으로 빛나 보임. NS_VFX_Evil의 보라색 계열에 맞춤
+    color.set_editor_property("constant", unreal.LinearColor(4.0, 0.5, 6.0, 1.0))
+    editing.connect_material_property(color, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    editing.recompile_material(material)
+    require(lib.save_loaded_asset(material, only_if_is_dirty=False), "Failed to save " + name)
+    return material
+
+
 def configure_projectile(ranged):
     projectile = require(lib.load_asset(BP_ROOT + "/BP_EnemyProjectile"), "Missing BP_EnemyProjectile")
     cdo = unreal.get_default_object(projectile.generated_class())
     cdo.set_editor_property("trail_effect", require(lib.load_asset(VFX_ROOT + "/NS_VFX_Evil"), "Missing NS_VFX_Evil"))
     cdo.set_editor_property("impact_effect", require(lib.load_asset(VFX_ROOT + "/NS_VFX_Explosion"), "Missing NS_VFX_Explosion"))
+    # 팩 시스템은 발사(Emitter_*)·비행(Projectile_*)·폭발(Explosion_*) 이미터를 한 시스템에 담고 있음.
+    # 그대로 붙이면 비행 중에도 발사 연기와 폭발이 터져 방향이 읽히지 않아서, 단계에 맞는 이미터만 남김
+    cdo.set_editor_property("trail_disabled_emitters", [
+        "Emitter_Smoke", "Emitter_Particle", "Explosion_Distortion", "Explosion_Flare", "Explosion_Particle"])
+    cdo.set_editor_property("impact_disabled_emitters", [
+        "Emitter_LeafRing", "Projectile_Smoke", "Projectile_VFX", "Projectile_Particle001"])
+    cdo.set_editor_property("trail_effect_scale", unreal.Vector(0.6, 0.6, 0.6))
+    cdo.set_editor_property("impact_effect_scale", unreal.Vector(0.7, 0.7, 0.7))
+    cdo.set_editor_property("core_material", ensure_core_material())
     unreal.BlueprintEditorLibrary.compile_blueprint(projectile)
     require(lib.save_loaded_asset(projectile, only_if_is_dirty=False), "Failed to save BP_EnemyProjectile")
     # 네이티브 클래스 대신 VFX가 지정된 BP 투사체를 쏘도록 바꿈

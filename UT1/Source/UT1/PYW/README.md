@@ -119,6 +119,12 @@ Run order after building UT1Editor (both scripts are re-runnable):
 2. `Content/PYW/setup_monster_enemies.py` - BP meshes/animations, projectile VFX,
    test enemies in `Lvl_EnemyBTTest`, and removal of leftover redirectors.
 
+The ProjectileVFX systems bundle launch (`Emitter_*`), flight (`Projectile_*`) and
+impact (`Explosion_*`) emitters in one system. `BP_EnemyProjectile` disables the
+emitters that do not belong to each stage (`TrailDisabledEmitters`,
+`ImpactDisabledEmitters`), and shows a shadowless glowing core
+(`M_EnemyProjectileCore`) at the collision size so the hit position stays readable.
+
 Spawning actors from Python crashes under `-nullrhi`; run the second script
 with `-RenderOffscreen`.
 

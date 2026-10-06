@@ -3,7 +3,9 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "Kismet/GameplayStatics.h"
+#include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 #include "PYW/Entities/EnemyCharacter.h"
@@ -27,7 +29,10 @@ AEnemyProjectile::AEnemyProjectile()
 	Visual = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Visual"));
 	Visual->SetupAttachment(Collision);
 	Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Visual->SetRelativeScale3D(FVector(0.22f));
+	// 떠 있는 작은 구체의 그림자가 바닥에 따로 찍혀 투사체가 둘로 보이지 않게 함
+	Visual->SetCastShadow(false);
+	// 기본 구체가 지름 100cm라서 충돌 구체(지름 28cm)와 비슷한 크기로 맞춤
+	Visual->SetRelativeScale3D(FVector(0.3f));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere"));
 	if (SphereMesh.Succeeded()) Visual->SetStaticMesh(SphereMesh.Object);
 
@@ -46,12 +51,14 @@ void AEnemyProjectile::BeginPlay()
 	Movement->InitialSpeed = Speed;
 	Movement->MaxSpeed = Speed;
 	Movement->Velocity = GetActorForwardVector() * Speed;
+	if (CoreMaterial) Visual->SetMaterial(0, CoreMaterial);
 	if (TrailEffect)
 	{
 		// 이펙트 수명을 액터에 묶어 두어 투사체가 사라질 때 함께 정리되게 함
-		UNiagaraFunctionLibrary::SpawnSystemAttached(TrailEffect, Collision, NAME_None, FVector::ZeroVector,
-			FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, true);
-		Visual->SetVisibility(false);
+		UNiagaraComponent* Trail = UNiagaraFunctionLibrary::SpawnSystemAttached(TrailEffect, Collision, NAME_None,
+			FVector::ZeroVector, FRotator::ZeroRotator, TrailEffectScale, EAttachLocation::KeepRelativeOffset, true,
+			ENCPoolMethod::None, false);
+		ActivateWithDisabledEmitters(Trail, TrailDisabledEmitters);
 	}
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileLaunched Projectile=%s Location=%s Velocity=%s Trail=%s"),
 		*GetName(), *GetActorLocation().ToCompactString(), *Movement->Velocity.ToCompactString(), *GetNameSafe(TrailEffect));
@@ -78,12 +85,24 @@ void AEnemyProjectile::Explode(AActor* OtherActor, const FVector& ImpactLocation
 	if (ImpactEffect)
 	{
 		// 액터가 바로 제거되므로 붙이지 않고 월드 위치에 독립적으로 생성함
-		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ImpactEffect, ImpactLocation,
-			GetActorRotation(), ImpactEffectScale);
+		UNiagaraComponent* Impact = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ImpactEffect, ImpactLocation,
+			GetActorRotation(), ImpactEffectScale, true, false);
+		ActivateWithDisabledEmitters(Impact, ImpactDisabledEmitters);
 	}
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileExploded Projectile=%s Location=%s Impact=%s"),
 		*GetName(), *ImpactLocation.ToCompactString(), *GetNameSafe(ImpactEffect));
 	Destroy();
+}
+
+void AEnemyProjectile::ActivateWithDisabledEmitters(UNiagaraComponent* Effect, const TArray<FName>& DisabledEmitters)
+{
+	if (!Effect) return;
+	// 컴포넌트가 오버라이드로 저장했다가 활성화할 때 적용하므로 반드시 Activate 전에 꺼야 함
+	for (const FName& EmitterName : DisabledEmitters)
+	{
+		Effect->SetEmitterEnable(EmitterName, false);
+	}
+	Effect->Activate(true);
 }
 
 void AEnemyProjectile::ApplyProjectileDamage(AActor* OtherActor)

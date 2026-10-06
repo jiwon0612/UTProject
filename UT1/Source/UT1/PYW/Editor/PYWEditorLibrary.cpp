@@ -5,6 +5,7 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
+#include "NiagaraSystem.h"
 
 int32 UPYWEditorLibrary::RebuildBlendSpace(UBlendSpace* BlendSpace)
 {
@@ -181,6 +182,17 @@ TArray<FString> UPYWEditorLibrary::RemoveBrokenInputActionEvents(UBlueprint* Blu
 	if (Blueprint) return RemoveDedicatedNodes(Blueprint, IsBrokenInputActionEvent);
 #endif
 	return {};
+}
+
+TArray<FString> UPYWEditorLibrary::GetNiagaraEmitterNames(UNiagaraSystem* System)
+{
+	TArray<FString> Names;
+	if (!System) return Names;
+	for (const FNiagaraEmitterHandle& Handle : System->GetEmitterHandles())
+	{
+		Names.Add(FString::Printf(TEXT("%s%s"), *Handle.GetName().ToString(), Handle.GetIsEnabled() ? TEXT("") : TEXT(" (disabled)")));
+	}
+	return Names;
 }
 
 TArray<FString> UPYWEditorLibrary::RemoveNullMappingContextCalls(UBlueprint* Blueprint)

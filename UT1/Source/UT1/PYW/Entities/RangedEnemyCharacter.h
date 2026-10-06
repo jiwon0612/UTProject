@@ -19,7 +19,7 @@ public:
 	TSubclassOf<AEnemyProjectile> ProjectileClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Ranged", meta = (ClampMin = "100.0"))
-	float ProjectileSpeed = 1200.0f;
+	float ProjectileSpeed = 900.0f; // 날아오는 방향을 눈으로 따라갈 수 있는 속도임
 
 protected:
 	virtual bool ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex) override;
