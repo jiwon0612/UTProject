@@ -5,10 +5,11 @@
 #include "UT1_RoomButton.generated.h"
 
 class UButton;
-class UTextBlock;
+class UImage;
+class UTexture2D;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-    FRoomButtonClicked,
+    FOnRoomButtonClicked,
     int32,
     RoomID
 );
@@ -18,37 +19,35 @@ class UT1_API UUT1_RoomButton : public UUserWidget
 {
     GENERATED_BODY()
 
-public:
+protected:
 
     virtual void NativeConstruct() override;
 
-    // =========================================================
-    // 초기화
-    // =========================================================
+public:
 
-    void InitializeRoom(
+    UPROPERTY(meta = (BindWidget))
+    UButton* RoomButton;
+
+    UPROPERTY(meta = (BindWidget))
+    UImage* RoomImage;
+
+
+    UPROPERTY(BlueprintAssignable)
+    FOnRoomButtonClicked OnRoomButtonClicked;
+
+
+    void SetupRoomButton(
         int32 InRoomID,
-        bool bInCanMove,
-        bool bInIsCurrent
+        UTexture2D* InRoomTexture,
+        bool bCanMove,
+        bool bIsCurrent
     );
 
 public:
-
-    UPROPERTY(BlueprintAssignable)
-    FRoomButtonClicked OnRoomButtonClicked;
-
-protected:
-
-    // =========================================================
-    // WBP_RoomButton
-    // =========================================================
-
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<UButton> RoomButton;
-
-    UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UTextBlock> RoomText;
-
+    int32 GetRoomID() const
+    {
+        return RoomID;
+    }
 
 private:
 
@@ -56,14 +55,7 @@ private:
     void OnClicked();
 
 
-    void UpdateButtonState();
-
-
 private:
 
     int32 RoomID = INDEX_NONE;
-
-    bool bCanMove = false;
-
-    bool bIsCurrent = false;
 };

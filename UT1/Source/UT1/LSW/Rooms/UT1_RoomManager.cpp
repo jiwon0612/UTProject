@@ -1,50 +1,42 @@
 #include "LSW/Rooms/UT1_RoomManager.h"
 #include "LSW/Rooms/UT1_RoomBase.h"
 #include "LSW/Rooms/UT1_Portal.h"
-#include "Blueprint/UserWidget.h"
 #include "LSW/Widget/UT1_PortalWidget.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
-#include "InputCoreTypes.h"
-#include "DrawDebugHelpers.h"
-#include "Engine/Engine.h"
-
+#include "Components/InputComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Math/UnrealMathUtility.h"
 
 AUT1_RoomManager::AUT1_RoomManager()
 {
     PrimaryActorTick.bCanEverTick = false;
 }
 
-
 void AUT1_RoomManager::BeginPlay()
 {
     Super::BeginPlay();
 
-    APlayerController* PC =
-        GetWorld()->GetFirstPlayerController();
-
-    if (PC)
-    {
-        EnableInput(PC);
-    }
-
-    if (InputComponent)
-    {
-        InputComponent->BindKey(
-            EKeys::E,
-            IE_Pressed,
-            this,
-            &AUT1_RoomManager::TryInteractPortal
+    APlayerController* PlayerController =
+        UGameplayStatics::GetPlayerController(
+            GetWorld(),
+            0
         );
-    }
-    else
+
+    if (PlayerController)
     {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[RoomManager] InputComponent is NULL")
-        );
+        EnableInput(PlayerController);
+
+        if (InputComponent)
+        {
+            InputComponent->BindKey(
+                EKeys::E,
+                IE_Pressed,
+                this,
+                &AUT1_RoomManager::TryInteractPortal
+            );
+        }
     }
 
     GenerateDungeon();
@@ -54,83 +46,213 @@ void AUT1_RoomManager::GenerateDungeon()
 {
     RoomNodes.Empty();
 
-    // =========================
-    // Base
-    // =========================
+    if (DungeonRoomCount <= 0)
+    {
+        return;
+    }
+
+    if (!BaseRoomClass)
+    {
+        return;
+    }
+
+    if (NormalRoomClasses.Num() == 0)
+    {
+        return;
+    }
 
     FRoomNode BaseRoom;
 
     BaseRoom.RoomID = 0;
     BaseRoom.RoomType = ERoomType::Base;
+    BaseRoom.bIsCleared = true;
+    BaseRoom.SelectedRoomIndex = INDEX_NONE;
 
     RoomNodes.Add(BaseRoom);
 
+    bool bPreviousWasMidBoss = false;
 
-    // =========================
-    // Normal Rooms
-    // =========================
-
-    const int32 RoomCount = NormalRoomClasses.Num();
-
-    for (int32 i = 0; i < RoomCount; ++i)
+    for (int32 i = 0; i < DungeonRoomCount; ++i)
     {
+        const int32 RoomID = i + 1;
+
         FRoomNode NewRoom;
 
-        NewRoom.RoomID = i + 1;
-        NewRoom.RoomType = ERoomType::Normal;
+        NewRoom.RoomID = RoomID;
+        NewRoom.bIsCleared = false;
+        NewRoom.SelectedRoomIndex = INDEX_NONE;
 
-        // 이전 방과 다음 방 연결
-        if (i == 0)
+        if (RoomID == DungeonRoomCount)
         {
-            NewRoom.ConnectedRoomIDs.Add(0);
+            NewRoom.RoomType = ERoomType::Boss;
+
+            NewRoom.SelectedRoomIndex =
+                GetRandomRoomIndex(BossRoomClasses);
+
+            bPreviousWasMidBoss = false;
         }
         else
         {
-            NewRoom.ConnectedRoomIDs.Add(i);
+            NewRoom.RoomType =
+                GetRandomRoomType(RoomID, bPreviousWasMidBoss);
+
+            switch (NewRoom.RoomType)
+            {
+                case ERoomType::Normal:
+                {
+                    NewRoom.SelectedRoomIndex =
+                        GetRandomRoomIndex(NormalRoomClasses);
+
+                    break;
+                }
+
+                case ERoomType::Gimmick:
+                {
+                    NewRoom.SelectedRoomIndex = GetRandomRoomIndex(GimmickRoomClasses);
+
+                    if (NewRoom.SelectedRoomIndex == INDEX_NONE)
+                    {
+                        NewRoom.RoomType = ERoomType::Normal;
+                        NewRoom.SelectedRoomIndex = GetRandomRoomIndex(NormalRoomClasses);
+                        bPreviousWasMidBoss = false;
+                    }
+
+                    break;
+                }
+
+                case ERoomType::MidBoss:
+                {
+                    NewRoom.SelectedRoomIndex =
+                        GetRandomRoomIndex(
+                            MidBossRoomClasses
+                        );
+
+                    if (NewRoom.SelectedRoomIndex == INDEX_NONE)
+                    {
+                        NewRoom.RoomType = ERoomType::Normal;
+
+                        NewRoom.SelectedRoomIndex =
+                            GetRandomRoomIndex(NormalRoomClasses);
+
+                        bPreviousWasMidBoss = false;
+                    }
+
+                    break;
+                }
+
+                default:
+                {
+                    NewRoom.SelectedRoomIndex = GetRandomRoomIndex(
+                            NormalRoomClasses);
+
+                    NewRoom.RoomType = ERoomType::Normal;
+
+                    bPreviousWasMidBoss = false;
+
+                    break;
+                }
+            }
         }
 
-        if (i + 1 < RoomCount)
+        NewRoom.ConnectedRoomIDs.Add(RoomID - 1);
+
+        if (RoomID < DungeonRoomCount)
         {
-            NewRoom.ConnectedRoomIDs.Add(i + 2);
+            NewRoom.ConnectedRoomIDs.Add(RoomID + 1);
         }
-
-        // 방 Blueprint를 생성 시점에 랜덤 결정
-        NewRoom.SelectedRoomIndex =
-            FMath::RandRange(
-                0,
-                NormalRoomClasses.Num() - 1
-            );
 
         RoomNodes.Add(NewRoom);
     }
 
-
-    // 시작
     CurrentRoomID = 0;
 
     SpawnCurrentRoom();
 }
 
+ERoomType AUT1_RoomManager::GetRandomRoomType(int32 RoomID,
+    bool& bPreviousWasMidBoss) const
+{
+    const bool bCanSpawnMidBoss = RoomID >= MidBossMinRoom &&
+        RoomID <= MidBossMaxRoom && !bPreviousWasMidBoss;
+
+    const float NormalWeight = FMath::Max(
+            0.0f, NormalRoomWeight);
+
+    const float GimmickWeight = FMath::Max(
+            0.0f, GimmickRoomWeight);
+
+    const float MidBossWeight = bCanSpawnMidBoss
+        ? FMath::Max(0.0f,MidBossRoomWeight) : 0.0f;
+
+
+    const float TotalWeight =NormalWeight +GimmickWeight +
+        MidBossWeight;
+
+    if (TotalWeight <= 0.0f)
+    {
+        bPreviousWasMidBoss = false;
+        return ERoomType::Normal;
+    }
+
+    const float RandomValue = FMath::FRandRange(
+            0.0f, TotalWeight);
+
+    if (RandomValue < NormalWeight)
+    {
+        bPreviousWasMidBoss = false;
+        return ERoomType::Normal;
+    }
+
+    if (RandomValue < NormalWeight + GimmickWeight)
+    {
+        bPreviousWasMidBoss = false;
+
+        return ERoomType::Gimmick;
+    }
+
+    if (bCanSpawnMidBoss)
+    {
+        bPreviousWasMidBoss = true;
+
+        return ERoomType::MidBoss;
+    }
+
+    bPreviousWasMidBoss = false;
+
+    return ERoomType::Normal;
+}
+
+int32 AUT1_RoomManager::GetRandomRoomIndex(
+    const TArray<TSubclassOf<AUT1_RoomBase>>& RoomClasses) const
+{
+    if (RoomClasses.Num() == 0)
+    {
+        return INDEX_NONE;
+    }
+
+    return FMath::RandRange(0, RoomClasses.Num() - 1);
+}
+
 void AUT1_RoomManager::MoveToRoom(
     int32 NextRoomID)
 {
-    FRoomNode* NextRoomNode = FindRoomNode(NextRoomID);
+    if (!CanMoveToRoom(NextRoomID))
+    {
+        return;
+    }
 
-    FRoomNode* CurrentRoomNode = FindRoomNode(CurrentRoomID);
-
-    if (!NextRoomNode || !CurrentRoomNode)
+    if (!RoomNodes.IsValidIndex(NextRoomID))
     {
         return;
     }
 
     ClosePortalWidget();
-
     DestroyCurrentPortal();
 
     if (CurrentRoomActor)
     {
+        CurrentRoomActor->ResetRoom();
         CurrentRoomActor->Destroy();
-
         CurrentRoomActor = nullptr;
     }
 
@@ -141,17 +263,16 @@ void AUT1_RoomManager::MoveToRoom(
 
 void AUT1_RoomManager::MoveToNextRoom()
 {
+    if (CurrentRoomID == INDEX_NONE)
+    {
+        return;
+    }
+
     const int32 NextRoomID =
         CurrentRoomID + 1;
 
     if (!RoomNodes.IsValidIndex(NextRoomID))
     {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("더 이상 이동할 방이 없습니다.")
-        );
-
         return;
     }
 
@@ -162,12 +283,6 @@ void AUT1_RoomManager::MoveToBaseRoom()
 {
     if (CurrentRoomID == 0)
     {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("이미 Base에 있습니다.")
-        );
-
         return;
     }
 
@@ -183,6 +298,11 @@ bool AUT1_RoomManager::IsLastRoom() const
 
 void AUT1_RoomManager::SpawnCurrentRoom()
 {
+    if (!GetWorld())
+    {
+        return;
+    }
+
     FRoomNode* RoomNode =
         FindRoomNode(CurrentRoomID);
 
@@ -202,7 +322,9 @@ void AUT1_RoomManager::SpawnCurrentRoom()
     FActorSpawnParameters SpawnParams;
 
     SpawnParams.SpawnCollisionHandlingOverride =
-        ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        ESpawnActorCollisionHandlingMethod::
+        AlwaysSpawn;
+
 
     CurrentRoomActor =
         GetWorld()->SpawnActor<AUT1_RoomBase>(
@@ -220,188 +342,178 @@ void AUT1_RoomManager::SpawnCurrentRoom()
 
     CurrentRoomActor->SetupRoom();
 
-    APlayerController* PlayerController =
-        GetWorld()->GetFirstPlayerController();
-
-    if (!PlayerController)
-    {
-        return;
-    }
-
     APawn* PlayerPawn =
-        PlayerController->GetPawn();
+        UGameplayStatics::GetPlayerPawn(
+            GetWorld(),
+            0
+        );
 
-    if (!PlayerPawn)
+    if (PlayerPawn)
     {
-        return;
+        PlayerPawn->SetActorLocation(
+            CurrentRoomActor->
+            GetPlayerSpawnLocation()
+        );
     }
 
-    FVector PlayerSpawnLocation =
-        CurrentRoomActor->GetPlayerSpawnLocation();
-
-
-    PlayerPawn->SetActorLocation(
-        PlayerSpawnLocation
-    );
-
+    if (RoomNode->RoomType == ERoomType::Base)
+    {
+        SpawnCurrentPortal();
+    }
+    else if (RoomNode->RoomType == ERoomType::MidBoss &&
+        RoomNode->bIsCleared)
+    {
+        SpawnCurrentPortal();
+    }
     SpawnCurrentPortal();
 }
 
-void AUT1_RoomManager::SpawnCurrentPortal()
+TSubclassOf<AUT1_RoomBase> AUT1_RoomManager::GetRoomClass(
+    FRoomNode& RoomNode)
 {
-    if (!PortalClass)
+    switch (RoomNode.RoomType)
     {
-        return;
+    case ERoomType::Base:
+    {
+        return BaseRoomClass;
+    }
+    case ERoomType::Normal:
+    {
+        if (!NormalRoomClasses.IsValidIndex(
+            RoomNode.SelectedRoomIndex))
+        {
+            return nullptr;
+        }
+
+        return NormalRoomClasses[
+            RoomNode.SelectedRoomIndex
+        ];
+    }
+    case ERoomType::Gimmick:
+    {
+        if (!GimmickRoomClasses.IsValidIndex(
+            RoomNode.SelectedRoomIndex))
+        {
+            return nullptr;
+        }
+
+        return GimmickRoomClasses[
+            RoomNode.SelectedRoomIndex
+        ];
     }
 
-    DestroyCurrentPortal();
+    case ERoomType::MidBoss:
+    {
+        if (!MidBossRoomClasses.IsValidIndex(
+            RoomNode.SelectedRoomIndex))
+        {
+            return nullptr;
+        }
 
-    FActorSpawnParameters SpawnParams;
+        return MidBossRoomClasses[
+            RoomNode.SelectedRoomIndex
+        ];
+    }
 
-    SpawnParams.SpawnCollisionHandlingOverride =
-        ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    case ERoomType::Boss:
+    {
+        if (!BossRoomClasses.IsValidIndex(
+            RoomNode.SelectedRoomIndex))
+        {
+            return nullptr;
+        }
 
-    CurrentPortal =
-        GetWorld()->SpawnActor<AUT1_Portal>(
-            PortalClass,
-            PortalSpawnLocation,
-            FRotator::ZeroRotator,
-            SpawnParams
-        );
+        return BossRoomClasses[
+            RoomNode.SelectedRoomIndex
+        ];
+    }
+
+
+    default:
+    {
+        return nullptr;
+    }
+    }
 }
 
-void AUT1_RoomManager::DestroyCurrentPortal()
+
+FRoomNode* AUT1_RoomManager::FindRoomNode(
+    int32 RoomID
+)
 {
-    if (IsValid(CurrentPortal))
-    {
-        CurrentPortal->Destroy();
-    }
-
-    CurrentPortal = nullptr;
-}
-
-void AUT1_RoomManager::TryInteractPortal()
-{
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] E Pressed")
-    );
-
-    if (!IsValid(CurrentPortal))
-    {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] CurrentPortal INVALID")
-        );
-
-        return;
-    }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] CurrentPortal VALID")
-    );
-
-    if (!CurrentPortal->IsPlayerInRange())
-    {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("[Portal] Player is NOT in range")
-        );
-
-        return;
-    }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] Player IN range")
-    );
-
-    if (!PortalWidgetClass)
-    {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] PortalWidgetClass is NULL")
-        );
-
-        return;
-    }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] PortalWidgetClass VALID")
-    );
-
-    if (IsValid(PortalWidget))
-    {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("[Portal] PortalWidget already exists")
-        );
-
-        return;
-    }
-
-    APlayerController* PC =
-        GetWorld()->GetFirstPlayerController();
-
-    if (!PC)
-    {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] PlayerController NULL")
-        );
-
-        return;
-    }
-
-    PortalWidget =
-        CreateWidget<UUT1_PortalWidget>(
-            PC,
-            PortalWidgetClass
-        );
-
-    if (!PortalWidget)
-    {
-        UE_LOG(
-            LogTemp,
-            Error,
-            TEXT("[Portal] CreateWidget FAILED")
-        );
-
-        return;
-    }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] CreateWidget SUCCESS")
-    );
-
-    PortalWidget->AddToViewport(100);
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("[Portal] AddToViewport SUCCESS")
+    return RoomNodes.FindByPredicate(
+        [RoomID](const FRoomNode& Node)
+        {
+            return Node.RoomID == RoomID;
+        }
     );
 }
 
-void AUT1_RoomManager::ClosePortalWidget()
+
+const FRoomNode* AUT1_RoomManager::FindRoomNode(
+    int32 RoomID
+) const
 {
-    if (IsValid(PortalWidget))
+    return RoomNodes.FindByPredicate(
+        [RoomID](const FRoomNode& Node)
+        {
+            return Node.RoomID == RoomID;
+        }
+    );
+}
+
+bool AUT1_RoomManager::CanMoveToRoom(int32 RoomID) const
+{
+    const FRoomNode* CurrentRoom =
+        FindRoomNode(CurrentRoomID);
+
+    const FRoomNode* TargetRoom =
+        FindRoomNode(RoomID);
+
+    if (!CurrentRoom || !TargetRoom)
     {
-        PortalWidget->RemoveFromParent();
-        PortalWidget = nullptr;
+        return false;
+    }
+
+    if (RoomID == CurrentRoomID)
+    {
+        return false;
+    }
+
+    if (RoomID == CurrentRoomID + 1)
+    {
+        return true;
+    }
+
+    if (TargetRoom->RoomType == ERoomType::Base)
+    {
+        return TargetRoom->bIsCleared;
+    }
+
+    if (TargetRoom->RoomType == ERoomType::MidBoss)
+    {
+        return TargetRoom->bIsCleared;
+    }
+
+
+    return false;
+}
+
+void AUT1_RoomManager::MarkCurrentRoomCleared()
+{
+    FRoomNode* CurrentRoom =
+        FindRoomNode(CurrentRoomID);
+
+    if (!CurrentRoom)
+    {
+        return;
+    }
+
+    CurrentRoom->bIsCleared = true;
+
+    if (CurrentRoom->RoomType == ERoomType::MidBoss)
+    {
+        SpawnCurrentPortal();
     }
 }
 
@@ -411,96 +523,134 @@ AUT1_RoomManager::GetCurrentRoomNode() const
     return FindRoomNode(CurrentRoomID);
 }
 
-FRoomNode*
-AUT1_RoomManager::FindRoomNode(
-    int32 RoomID
-)
+int32 AUT1_RoomManager::GetConnectedRoomID(
+    int32 Direction) const
 {
-    for (FRoomNode& RoomNode : RoomNodes)
+    const FRoomNode* CurrentNode =
+        GetCurrentRoomNode();
+
+    if (!CurrentNode)
     {
-        if (RoomNode.RoomID == RoomID)
+        return INDEX_NONE;
+    }
+
+    if (Direction == 0)
+    {
+        if (CurrentNode->ConnectedRoomIDs.Num() > 0)
         {
-            return &RoomNode;
+            return CurrentNode->
+                ConnectedRoomIDs[0];
         }
     }
 
-    return nullptr;
+
+    if (Direction == 1)
+    {
+        if (CurrentNode->ConnectedRoomIDs.Num() > 1)
+        {
+            return CurrentNode->
+                ConnectedRoomIDs[1];
+        }
+    }
+
+
+    return INDEX_NONE;
 }
 
-
-const FRoomNode*
-AUT1_RoomManager::FindRoomNode(
-    int32 RoomID
-) const
+void AUT1_RoomManager::SpawnCurrentPortal()
 {
-    for (const FRoomNode& RoomNode : RoomNodes)
+    if (!GetWorld())
     {
-        if (RoomNode.RoomID == RoomID)
-        {
-            return &RoomNode;
-        }
+        return;
     }
 
-    return nullptr;
+    if (!PortalClass)
+    {
+        return;
+    }
+
+
+    DestroyCurrentPortal();
+
+
+    FActorSpawnParameters SpawnParams;
+
+    SpawnParams.SpawnCollisionHandlingOverride =
+        ESpawnActorCollisionHandlingMethod::
+        AlwaysSpawn;
+
+
+    CurrentPortal =
+        GetWorld()->SpawnActor<AUT1_Portal>(
+            PortalClass,
+            PortalSpawnLocation,
+            FRotator::ZeroRotator,
+            SpawnParams
+        );
+
+
+    if (!CurrentPortal)
+    {
+        return;
+    }
 }
 
-TSubclassOf<AUT1_RoomBase>
-AUT1_RoomManager::GetRoomClass(FRoomNode& RoomNode)
+void AUT1_RoomManager::DestroyCurrentPortal()
 {
-    switch (RoomNode.RoomType)
+    if (CurrentPortal)
     {
-        case ERoomType::Base:
-        {
-            return BaseRoomClass;
-        }
+        CurrentPortal->Destroy();
 
-
-        case ERoomType::Normal:
-        {
-            if (NormalRoomClasses.Num() == 0)
-            {
-                return nullptr;
-            }
-
-            if (RoomNode.SelectedRoomIndex ==INDEX_NONE)
-            {
-                return nullptr;
-            }
-
-
-            if (!NormalRoomClasses.IsValidIndex(RoomNode.SelectedRoomIndex))
-            {
-                return nullptr;
-            }
-            return NormalRoomClasses[RoomNode.SelectedRoomIndex];
-        }
-        default:
-        {
-            return nullptr;
-        }
+        CurrentPortal = nullptr;
     }
+}
+
+void AUT1_RoomManager::TryInteractPortal()
+{
+    if (!CurrentPortal)
+    {
+        return;
+    }
+
+    if (PortalWidget)
+    {
+        ClosePortalWidget();
+        return;
+    }
+
+    if (!PortalWidgetClass)
+    {
+        return;
+    }
+
+    PortalWidget =
+        CreateWidget<UUT1_PortalWidget>(
+            GetWorld(),
+            PortalWidgetClass
+        );
+
+    PortalWidget->AddToViewport();
+    PortalWidget->RefreshRoomList();
+
+    PortalWidget->SetVisibility(
+        ESlateVisibility::Visible);
+
+    PortalWidget->RefreshRoomList();
+}
+
+void AUT1_RoomManager::ClosePortalWidget()
+{
+    if (!PortalWidget)
+    {
+        return;
+    }
+
+    PortalWidget->RemoveFromParent();
+
+    PortalWidget = nullptr;
 }
 
 void AUT1_RoomManager::TestMoveToBaseRoom()
 {
-    for (const FRoomNode& RoomNode : RoomNodes)
-    {
-        if (RoomNode.RoomType == ERoomType::Base)
-        {
-            UE_LOG(
-                LogTemp,
-                Warning,
-                TEXT(
-                    "P 입력 - Base Room %d로 이동"
-                ),
-                RoomNode.RoomID
-            );
-
-            MoveToRoom(
-                RoomNode.RoomID
-            );
-
-            return;
-        }
-    }
+    MoveToBaseRoom();
 }
