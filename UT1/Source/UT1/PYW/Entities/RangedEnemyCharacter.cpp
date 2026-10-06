@@ -8,6 +8,7 @@
 ARangedEnemyCharacter::ARangedEnemyCharacter()
 {
 	CombatType = EEnemyCombatType::Ranged;
+	MaxHealth = 50.0f;
 	AttackRange = 900.0f;
 	WalkSpeed = 160.0f;
 	ChaseSpeed = 320.0f;

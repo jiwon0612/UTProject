@@ -25,22 +25,22 @@ real `BP_Player` combat rules instead of a separate test pawn.
 - `EnemyCharacter`: enemy settings, movement speed by state, attack pattern
   selection, lunge/area/multi-hit resolution, poise/stagger, enrage, health,
   damage and directional death.
-- `MeleeEnemyCharacter`: soldier. Strafes during cooldown; slash, double strike,
+- `MeleeEnemyCharacter`: soldier, 50 HP (the caster too). Strafes during cooldown; slash, double strike,
   heavy smash (super armor, knockback) and a gap-closing lunge slash.
 - `RangedEnemyCharacter`: caster. Kites (backs off inside `RetreatDistance`);
   magic bolt, triple burst, spread volley and a close-range repel nova.
-- `BruteEnemyCharacter`: 1.3x scale, 320 HP, hard to stagger. Holds ground;
+- `BruteEnemyCharacter`: 1.3x scale, 160 HP, hard to stagger. Holds ground;
   smash, ground slam (area), mid-range charge, and a leap slam only when enraged
   below 40% HP.
-- `AssassinEnemyCharacter`: 0.92x scale, 65 HP, fast reaction and strafe;
+- `AssassinEnemyCharacter`: 0.92x scale, 33 HP, fast reaction and strafe;
   quick stab, three-hit flurry and a lunge stab.
-- `BomberEnemyCharacter`: 0.8x scale, 40 HP, sprints in and self-destructs after
+- `BomberEnemyCharacter`: 0.8x scale, 20 HP, sprints in and self-destructs after
   a 1.1s fuse. Any stagger cancels the fuse.
-- `GuardianEnemyCharacter`: shield guard, 1.1x scale, 150 HP, turns slowly. While not
+- `GuardianEnemyCharacter`: shield guard, 1.1x scale, 75 HP, turns slowly. While not
   attacking it takes only 20% of damage coming from its front 65 degrees, so the
   player flanks it or punishes its swings; shield bash, double bash, heavy chop and a
   mid-range shield charge.
-- `ArtilleryEnemyCharacter`: 0.95x scale, 70 HP, kites at long range (1300). Shells a
+- `ArtilleryEnemyCharacter`: 0.95x scale, 35 HP, kites at long range (1300). Shells a
   circle marked at the target's feet (lands 1.6s later), a scattered 4-shell barrage,
   and a close-range blast that pushes the target away.
 - `EnemyAIController`: owns Blackboard and the runtime Unreal Behavior Tree.
@@ -96,6 +96,22 @@ a frontal `StrikeHalfAngle` arc at impact, so backing off or sidestepping during
 the wind-up avoids the hit. With `bShowAttackDebug`, area attacks draw their
 landing circle during the wind-up and state changes ("!", stagger, enrage,
 pattern name) are drawn above the enemy.
+
+# Boss and mid-bosses
+
+Bosses are child Blueprints of the regular enemies, so they inherit mesh,
+animations, attack patterns and projectile; only size, health, damage, poise and
+loot are overridden. `AttackDamageMultiplier` scales every pattern's damage
+(applied with the level multiplier when a pattern starts).
+
+| Blueprint | Parent | Health | Damage | Capsule scale | Blueprint drop |
+|---|---|---|---|---|---|
+| `BP_BossEnemy` | `BP_LargeEnemy` (brute) | 650 | x1.8 | 1.7 | 35% each |
+| `BP_MidBossMelee` | `BP_MeleeEnemy` | 250 | x1.5 | 1.35 | 15% each |
+| `BP_MidBossRanged` | `BP_RangedEnemy` | 200 | x1.5 | 1.3 | 15% each |
+
+Health (bosses and regular enemies, which have half their original values) is tuned against the unenhanced player (10 damage per hit, about 12 damage
+per second with the katana): roughly 65 hits for the boss and 20-25 for a mid-boss.
 
 # Damage numbers and critical hits
 

@@ -8,7 +8,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 {
 	GetCapsuleComponent()->SetRelativeScale3D(FVector(0.92f));
 	CombatMovement = EEnemyCombatMovement::Strafe;
-	MaxHealth = 65.0f;
+	MaxHealth = 33.0f;
 	AttackRange = 100.0f;
 	WalkSpeed = 220.0f;
 	ChaseSpeed = 560.0f;

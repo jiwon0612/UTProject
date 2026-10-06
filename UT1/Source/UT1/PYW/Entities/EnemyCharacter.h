@@ -213,6 +213,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (TitleProperty = "Name"))
 	TArray<FEnemyAttackPattern> AttackPatterns;
 
+	// 모든 공격 패턴 피해에 곱하는 값임. 보스·중간 보스처럼 기존 적을 그대로 두고 더 세게 만들 때 BP에서 올림
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (ClampMin = "0.0"))
+	float AttackDamageMultiplier = 1.0f;
+
 	// 공격 한 번(투사체는 한 발)이 치명타가 될 확률임. 치명타는 CJW UUT1DamageType_Critical로 보내서
 	// 맞은 쪽(AUT1Entity)이 데미지 숫자를 치명타로 강조해 보여 줌
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (ClampMin = "0.0", ClampMax = "1.0"))

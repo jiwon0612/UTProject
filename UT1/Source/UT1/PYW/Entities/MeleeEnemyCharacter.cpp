@@ -6,6 +6,8 @@
 AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 {
 	CombatType = EEnemyCombatType::Melee;
+	// 플레이어 기본 공격(10)으로 5대에 쓰러짐. 이 클래스를 상속하는 적은 각자 다시 정함
+	MaxHealth = 50.0f;
 	CombatMovement = EEnemyCombatMovement::Strafe;
 	AttackRange = 120.0f;
 	WalkSpeed = 170.0f;

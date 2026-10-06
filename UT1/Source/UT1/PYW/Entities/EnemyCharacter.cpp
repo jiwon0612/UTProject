@@ -718,8 +718,8 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	const double Now = GetWorld()->GetTimeSeconds();
 	ActivePattern = AttackPatterns[PatternIndex];
 	if (!ActivePattern.Animation) ActivePattern.Animation = AttackAnimation;
-	// 근접·범위·투사체 모두 ActivePattern.Damage를 쓰므로 여기서 한 번만 레벨 배율을 곱함
-	ActivePattern.Damage *= GetLevelDamageMultiplier();
+	// 근접·범위·투사체 모두 ActivePattern.Damage를 쓰므로 여기서 한 번만 레벨·보스 배율을 곱함
+	ActivePattern.Damage *= GetLevelDamageMultiplier() * AttackDamageMultiplier;
 	ActiveAttackName = ActivePattern.Name.ToString();
 	LastPatternIndex = PatternIndex;
 	if (PatternReadyTimes.Num() != AttackPatterns.Num()) PatternReadyTimes.SetNumZeroed(AttackPatterns.Num());
