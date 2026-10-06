@@ -170,6 +170,10 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void Destroyed() override;
 
+	/** 다른 적이 준 피해는 버림. 적끼리 아군 피해가 없게 하는 단일 지점임 */
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
+		AController* EventInstigator, AActor* DamageCauser) override;
+
 	/** 돌진 공격이 착지하면 그 자리에 멈춤. 지면 마찰로 미끄러지며 남은 모션을 재생하지 않게 함 */
 	virtual void Landed(const FHitResult& Hit) override;
 
@@ -215,6 +219,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (TitleProperty = "Name"))
 	TArray<FEnemyAttackPattern> AttackPatterns;
+
+	// 모든 공격 패턴 피해에 곱하는 값임. 보스·중간 보스처럼 기존 적을 그대로 두고 더 세게 만들 때 BP에서 올림
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (ClampMin = "0.0"))
+	float AttackDamageMultiplier = 1.0f;
 
 	// 공격 한 번(투사체는 한 발)이 치명타가 될 확률임. 치명타는 CJW UUT1DamageType_Critical로 보내서
 	// 맞은 쪽(AUT1Entity)이 데미지 숫자를 치명타로 강조해 보여 줌

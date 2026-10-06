@@ -8,7 +8,7 @@ ABomberEnemyCharacter::ABomberEnemyCharacter()
 {
 	GetCapsuleComponent()->SetRelativeScale3D(FVector(0.8f));
 	CombatMovement = EEnemyCombatMovement::HoldGround;
-	MaxHealth = 40.0f;
+	MaxHealth = 20.0f;
 	AttackRange = 60.0f;
 	WalkSpeed = 200.0f;
 	ChaseSpeed = 520.0f;

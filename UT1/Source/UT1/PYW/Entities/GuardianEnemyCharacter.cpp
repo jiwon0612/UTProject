@@ -10,7 +10,7 @@ AGuardianEnemyCharacter::AGuardianEnemyCharacter()
 {
 	GetCapsuleComponent()->SetRelativeScale3D(FVector(1.1f));
 	CombatMovement = EEnemyCombatMovement::HoldGround;
-	MaxHealth = 150.0f;
+	MaxHealth = 75.0f;
 	AttackRange = 120.0f;
 	WalkSpeed = 150.0f;
 	ChaseSpeed = 300.0f;
