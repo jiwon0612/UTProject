@@ -77,7 +77,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 
 bool ARangedEnemyCharacter::SpawnProjectileAtTarget(AActor* Target, float Damage, float YawOffsetDegrees)
 {
-	if (!IsValid(Target) || !ProjectileClass || bDead) return false;
+	if (!IsValid(Target) || !ProjectileClass || bIsDead) return false;
 
 	const FVector AimPoint = Target->GetActorLocation() + FVector(0.0f, 0.0f, 40.0f);
 	const FVector LaunchOrigin = GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);

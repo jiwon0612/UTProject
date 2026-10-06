@@ -137,8 +137,6 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void Destroyed() override;
-	virtual float TakeDamage(float DamageAmount, const struct FDamageEvent& DamageEvent,
-		class AController* EventInstigator, AActor* DamageCauser) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
 	TObjectPtr<class UBlendSpace> LocomotionAnimation;
@@ -230,15 +228,6 @@ public:
 	// 거리 조절(Reposition/Retreat) 중 이동 속도임
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Movement", meta = (ClampMin = "0.0"))
 	float StrafeSpeed = 200.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Health", meta = (ClampMin = "1.0"))
-	float MaxHealth = 100.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Health")
-	float CurrentHealth = 100.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Health")
-	bool bDead = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Health", meta = (ClampMin = "0.0"))
 	float DeathCleanupDelay = 1.0f;
@@ -343,10 +332,15 @@ private:
 	void Enrage();
 	class UAnimSequence* SelectDirectionalAnimation(const AActor* Source, class UAnimSequence* Front,
 		class UAnimSequence* Back, class UAnimSequence* Left, class UAnimSequence* Right) const;
-	void Die(AController* Killer, AActor* DamageCauser);
 	void ShowDebugText(const FString& Text, const FColor& Color);
 
 protected:
+	/** Entity가 공통 체력 차감을 끝낸 뒤, 적 전용 피격 반응을 처리함. */
+	virtual void HandleDamaged(float ActualDamage, AActor* DamageCauser) override;
+
+	/** Entity의 단일 사망 판정 지점. AI와 적 전용 사망 연출을 여기서 정리함. */
+	virtual void HandleDeath(AActor* Killer) override;
+
 	/** 타격 1회를 처리함. HitIndex는 HitCount 중 몇 번째 판정인지임 */
 	virtual bool ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex);
 

@@ -78,7 +78,6 @@ void AEnemyCharacter::BeginPlay()
 		Fallback.Animation = AttackAnimation;
 	}
 	PatternReadyTimes.SetNumZeroed(AttackPatterns.Num());
-	CurrentHealth = MaxHealth;
 	GetCharacterMovement()->MaxWalkSpeed = GetMovementSpeedForState(CurrentState);
 	PlayLocomotionAnimation();
 	if (TestDeathDelay > 0.0f)
@@ -91,29 +90,20 @@ void AEnemyCharacter::BeginPlay()
 	}
 }
 
-float AEnemyCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
-	AController* EventInstigator, AActor* DamageCauser)
+void AEnemyCharacter::HandleDamaged(float ActualDamage, AActor* DamageCauser)
 {
-	if (bDead || DamageAmount <= 0.0f) return 0.0f;
-	const float AppliedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
-	if (AppliedDamage <= 0.0f) return 0.0f;
-
-	CurrentHealth = FMath::Max(0.0f, CurrentHealth - AppliedDamage);
+	Super::HandleDamaged(ActualDamage, DamageCauser);
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_DAMAGE Actor=%s Damage=%.1f Health=%.1f/%.1f"),
-		*GetName(), AppliedDamage, CurrentHealth, MaxHealth);
-	if (CurrentHealth <= 0.0f)
-	{
-		Die(EventInstigator, DamageCauser);
-		return AppliedDamage;
-	}
+		*GetName(), ActualDamage, CurrentHealth, MaxHealth);
 
 	// 감지 범위 밖이나 시야 밖에서 맞아도 공격자를 바로 추적함
-	APawn* InstigatorPawn = EventInstigator ? EventInstigator->GetPawn() : nullptr;
-	if (IsValid(InstigatorPawn) && !InstigatorPawn->IsA<AEnemyCharacter>())
+	APawn* SourcePawn = Cast<APawn>(DamageCauser);
+	if (!SourcePawn && IsValid(DamageCauser)) SourcePawn = DamageCauser->GetInstigator();
+	if (IsValid(SourcePawn) && !SourcePawn->IsA<AEnemyCharacter>())
 	{
 		if (AEnemyAIController* AI = Cast<AEnemyAIController>(GetController()))
 		{
-			AI->SetTargetActor(InstigatorPawn);
+			AI->SetTargetActor(SourcePawn);
 		}
 	}
 
@@ -126,23 +116,21 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damage
 	{
 		const double Now = GetWorld()->GetTimeSeconds();
 		if (Now - LastPoiseDamageTime > PoiseRecoveryTime) AccumulatedPoiseDamage = 0.0f;
-		AccumulatedPoiseDamage += AppliedDamage;
+		AccumulatedPoiseDamage += ActualDamage;
 		LastPoiseDamageTime = Now;
 		const bool bArmored = IsAttackInProgress() && ActivePattern.bSuperArmor;
 		if (AccumulatedPoiseDamage >= PoiseThreshold && !bArmored && !IsStaggered())
 		{
-			const AActor* Source = DamageCauser ? DamageCauser : static_cast<AActor*>(InstigatorPawn);
+			const AActor* Source = DamageCauser ? DamageCauser : static_cast<AActor*>(SourcePawn);
 			Stagger(Source);
 		}
 	}
-	return AppliedDamage;
 }
 
-void AEnemyCharacter::Die(AController* Killer, AActor* DamageCauser)
+void AEnemyCharacter::HandleDeath(AActor* Killer)
 {
-	if (bDead) return;
-	bDead = true;
-	CurrentHealth = 0.0f;
+	if (bIsDead) return;
+	Super::HandleDeath(Killer);
 	bPlayingActionAnimation = false;
 	// 대기 중인 타격, 연타, 돌진 타이머가 사망 후 발동하지 않도록 정리함
 	GetWorldTimerManager().ClearAllTimersForObject(this);
@@ -152,12 +140,9 @@ void AEnemyCharacter::Die(AController* Killer, AActor* DamageCauser)
 		AI->StopMovement();
 		if (UBrainComponent* Brain = AI->GetBrainComponent()) Brain->StopLogic(TEXT("Enemy died"));
 	}
-	GetCharacterMovement()->DisableMovement();
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	const AActor* Source = DamageCauser;
-	if (!Source && Killer) Source = Killer->GetPawn();
+	const AActor* Source = Killer;
 	UAnimSequence* ChosenDeath = Source && Source != this
 		? SelectDirectionalAnimation(Source, DeathAnimation, DeathBackAnimation, DeathLeftAnimation, DeathRightAnimation)
 		: DeathAnimation.Get();
@@ -170,7 +155,7 @@ void AEnemyCharacter::Die(AController* Killer, AActor* DamageCauser)
 	}
 	SetLifeSpan(FMath::Max(0.1f, DeathDuration + DeathCleanupDelay));
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_DEATH Actor=%s Animation=%s Duration=%.2f Causer=%s"),
-		*GetName(), *GetNameSafe(ChosenDeath), DeathDuration, *GetNameSafe(DamageCauser));
+		*GetName(), *GetNameSafe(ChosenDeath), DeathDuration, *GetNameSafe(Killer));
 }
 
 UAnimSequence* AEnemyCharacter::SelectDirectionalAnimation(const AActor* Source, UAnimSequence* Front,
@@ -217,7 +202,7 @@ void AEnemyCharacter::PlayActionAnimation(UAnimSequence* Animation, float MaxDur
 void AEnemyCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (bDead) return;
+	if (bIsDead) return;
 	if (bPlayingActionAnimation && GetWorld()->GetTimeSeconds() >= ActionAnimationEndTime)
 	{
 		PlayLocomotionAnimation();
@@ -238,7 +223,7 @@ void AEnemyCharacter::Tick(float DeltaSeconds)
 
 void AEnemyCharacter::Destroyed()
 {
-	if (bDead) UE_LOG(LogTemp, Display, TEXT("ENEMY_DEATH_REMOVED Actor=%s"), *GetName());
+	if (bIsDead) UE_LOG(LogTemp, Display, TEXT("ENEMY_DEATH_REMOVED Actor=%s"), *GetName());
 	Super::Destroyed();
 }
 
@@ -313,7 +298,7 @@ int32 AEnemyCharacter::ChooseAttackPattern(const AActor* Target) const
 
 bool AEnemyCharacter::CanStartAttack(const AActor* Target) const
 {
-	if (bDead || IsStaggered() || IsAttackInProgress() || GetWorld()->GetTimeSeconds() < NextAttackTime) return false;
+	if (bIsDead || IsStaggered() || IsAttackInProgress() || GetWorld()->GetTimeSeconds() < NextAttackTime) return false;
 	const float Gap = GetTargetGap(Target);
 	for (int32 Index = 0; Index < AttackPatterns.Num(); ++Index)
 	{
@@ -331,17 +316,17 @@ bool AEnemyCharacter::IsAttackInProgress() const
 
 bool AEnemyCharacter::IsStaggered() const
 {
-	return !bDead && GetWorld()->GetTimeSeconds() < StaggerEndTime;
+	return !bIsDead && GetWorld()->GetTimeSeconds() < StaggerEndTime;
 }
 
 bool AEnemyCharacter::IsAlerting() const
 {
-	return !bDead && GetWorld()->GetTimeSeconds() < AlertEndTime;
+	return !bIsDead && GetWorld()->GetTimeSeconds() < AlertEndTime;
 }
 
 void AEnemyCharacter::BeginAlert()
 {
-	if (bDead || ReactionTime <= 0.0f) return;
+	if (bIsDead || ReactionTime <= 0.0f) return;
 	AlertEndTime = GetWorld()->GetTimeSeconds() + ReactionTime;
 	SetAIState(EEnemyAIState::Alert);
 	ShowDebugText(TEXT("!"), FColor::Yellow);
@@ -365,7 +350,7 @@ void AEnemyCharacter::TurnTowardsYaw(float TargetYaw, float DeltaSeconds, float 
 
 void AEnemyCharacter::FaceTarget(const AActor* Target, float DeltaSeconds)
 {
-	if (bDead || !IsValid(Target) || IsAttackInProgress() || IsStaggered()) return;
+	if (bIsDead || !IsValid(Target) || IsAttackInProgress() || IsStaggered()) return;
 	const FVector Offset = Target->GetActorLocation() - GetActorLocation();
 	if (Offset.SizeSquared2D() <= KINDA_SMALL_NUMBER) return;
 	TurnTowardsYaw(Offset.Rotation().Yaw, DeltaSeconds, static_cast<float>(GetCharacterMovement()->RotationRate.Yaw));
@@ -458,7 +443,7 @@ bool AEnemyCharacter::ExecuteCombatAttack(AActor* Target, const FEnemyAttackPatt
 
 void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int32 HitIndex)
 {
-	if (bDead) return;
+	if (bIsDead) return;
 	AActor* Target = WeakTarget.Get();
 	const bool bHit = IsValid(Target) && ExecuteCombatAttack(Target, ActivePattern, HitIndex);
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_ATTACK_IMPACT Actor=%s Pattern=%s Hit=%d/%d Target=%s Result=%s"),
@@ -480,7 +465,7 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 			DrawDebugSphere(GetWorld(), GetActorLocation(), ActivePattern.AreaRadius, 16, FColor::Orange, false, 0.6f);
 		}
 		UE_LOG(LogTemp, Display, TEXT("ENEMY_SELF_DESTRUCT Actor=%s Hit=%s"), *GetName(), bHit ? TEXT("true") : TEXT("false"));
-		Die(GetController(), this);
+		HandleDeath(this);
 		// 폭발 연출이 없어 쓰러지는 모션 대신 바로 사라지게 함. BP_OnAttack에서 이펙트를 붙일 수 있음
 		SetActorHiddenInGame(true);
 		SetLifeSpan(0.2f);
@@ -489,7 +474,7 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 
 void AEnemyCharacter::PerformLunge(TWeakObjectPtr<AActor> WeakTarget)
 {
-	if (bDead) return;
+	if (bIsDead) return;
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	const float Gravity = FMath::Abs(Movement->GetGravityZ());
 	const float AirTime = ActivePattern.LungeLift > 0.0f && Gravity > KINDA_SMALL_NUMBER
@@ -521,7 +506,7 @@ void AEnemyCharacter::CancelActiveAttack()
 
 void AEnemyCharacter::Stagger(const AActor* Source)
 {
-	if (bDead) return;
+	if (bIsDead) return;
 	const bool bInterrupted = IsAttackInProgress();
 	CancelActiveAttack();
 	AccumulatedPoiseDamage = 0.0f;
@@ -625,7 +610,7 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 
 void AEnemyCharacter::SetAIState(EEnemyAIState NewState)
 {
-	if (bDead) return;
+	if (bIsDead) return;
 	if (CurrentState == NewState)
 	{
 		return;
