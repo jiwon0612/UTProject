@@ -93,7 +93,10 @@ bool ARangedEnemyCharacter::SpawnProjectileAtTarget(AActor* Target, float Damage
 	AEnemyProjectile* Projectile = GetWorld()->SpawnActorDeferred<AEnemyProjectile>(
 		ProjectileClass, SpawnTransform, this, this, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Projectile) return false;
-	Projectile->Damage = Damage;
+	// 치명타는 한 발씩 따로 굴림. 부채꼴 사격은 일부 탄만 치명타가 될 수 있음
+	float ShotDamage = Damage;
+	Projectile->DamageTypeClass = RollDamageType(ShotDamage);
+	Projectile->Damage = ShotDamage;
 	Projectile->Speed = ProjectileSpeed;
 	Projectile->FinishSpawning(SpawnTransform);
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileSpawned Enemy=%s Pattern=%s Target=%s Damage=%.1f YawOffset=%.1f"),

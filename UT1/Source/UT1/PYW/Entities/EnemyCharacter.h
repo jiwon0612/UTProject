@@ -209,6 +209,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (TitleProperty = "Name"))
 	TArray<FEnemyAttackPattern> AttackPatterns;
 
+	// 공격 한 번(투사체는 한 발)이 치명타가 될 확률임. 치명타는 CJW UUT1DamageType_Critical로 보내서
+	// 맞은 쪽(AUT1Entity)이 데미지 숫자를 치명타로 강조해 보여 줌
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CriticalChance = 0.1f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Attack", meta = (ClampMin = "1.0"))
+	float CriticalMultiplier = 1.5f;
+
+	/** 치명타를 굴려 피해량을 바꾸고, ApplyDamage에 넘길 DamageType을 돌려줌 */
+	TSubclassOf<class UDamageType> RollDamageType(float& InOutDamage) const;
+
 	// 근접 공격이 맞았을 때 대상 몸통에서 터지는 섬광의 색과 크기임
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Effect")
 	FLinearColor HitFlashColor = FLinearColor(1.0f, 0.55f, 0.25f);

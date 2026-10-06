@@ -159,6 +159,7 @@ void AEnemyProjectile::Explode(AActor* OtherActor, const FVector& ImpactLocation
 void AEnemyProjectile::ApplyProjectileDamage(AActor* OtherActor)
 {
 	if (!IsValid(OtherActor) || OtherActor == GetOwner()) return;
-	UGameplayStatics::ApplyDamage(OtherActor, Damage, GetInstigatorController(), this, UDamageType::StaticClass());
+	UGameplayStatics::ApplyDamage(OtherActor, Damage, GetInstigatorController(), this,
+		DamageTypeClass ? DamageTypeClass : TSubclassOf<UDamageType>(UDamageType::StaticClass()));
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileHit Target=%s Damage=%.1f"), *GetNameSafe(OtherActor), Damage);
 }

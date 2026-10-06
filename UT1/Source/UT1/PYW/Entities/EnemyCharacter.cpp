@@ -12,6 +12,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "CJW/Crafting/UT1LootDropComponent.h"
+#include "CJW/Combat/UT1DamageType_Critical.h"
 #include "PYW/AI/EnemyAIController.h"
 #include "PYW/Combat/EnemyEffects.h"
 #include "PYW/Combat/EnemyHitFlash.h"
@@ -499,11 +500,15 @@ bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& 
 		}
 	}
 
-	UGameplayStatics::ApplyDamage(Target, Pattern.Damage, GetController(), this, UDamageType::StaticClass());
-	// 범위 공격은 터지는 자리에 큰 섬광을 따로 보여 주므로, 단일 타격만 맞은 몸통에 작은 섬광을 냄
+	float Damage = Pattern.Damage;
+	const TSubclassOf<UDamageType> DamageType = RollDamageType(Damage);
+	const bool bCritical = DamageType->IsChildOf(UUT1DamageType_Critical::StaticClass());
+	UGameplayStatics::ApplyDamage(Target, Damage, GetController(), this, DamageType);
+	// 범위 공격은 터지는 자리에 큰 섬광을 따로 보여 주므로, 단일 타격만 맞은 몸통에 작은 섬광을 냄. 치명타는 더 크게 터짐
 	if (Pattern.AreaRadius <= 0.0f && HitFlashRadius > 0.0f)
 	{
-		AEnemyHitFlash::Spawn(GetWorld(), Target->GetActorLocation() + FVector(0.0f, 0.0f, 20.0f), HitFlashColor, HitFlashRadius);
+		AEnemyHitFlash::Spawn(GetWorld(), Target->GetActorLocation() + FVector(0.0f, 0.0f, 20.0f), HitFlashColor,
+			bCritical ? HitFlashRadius * 1.5f : HitFlashRadius);
 	}
 	if ((Pattern.KnockbackStrength > 0.0f || Pattern.KnockbackLift > 0.0f) && IsValid(Target))
 	{
@@ -591,6 +596,17 @@ void AEnemyCharacter::PerformLunge(TWeakObjectPtr<AActor> WeakTarget)
 	LaunchCharacter(Launch, true, true);
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_LUNGE Actor=%s Pattern=%s Speed=%.0f Lift=%.0f"),
 		*GetName(), *ActiveAttackName, HorizontalSpeed, ActivePattern.LungeLift);
+}
+
+TSubclassOf<UDamageType> AEnemyCharacter::RollDamageType(float& InOutDamage) const
+{
+	if (CriticalChance > 0.0f && FMath::FRand() < CriticalChance)
+	{
+		InOutDamage *= CriticalMultiplier;
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_CRITICAL Actor=%s Pattern=%s Damage=%.1f"), *GetName(), *ActiveAttackName, InOutDamage);
+		return UUT1DamageType_Critical::StaticClass();
+	}
+	return UDamageType::StaticClass();
 }
 
 FVector AEnemyCharacter::GetProjectileOrigin() const

@@ -90,6 +90,17 @@ the wind-up avoids the hit. With `bShowAttackDebug`, area attacks draw their
 landing circle during the wind-up and state changes ("!", stagger, enrage,
 pattern name) are drawn above the enemy.
 
+# Damage numbers and critical hits
+
+Damage numbers come from CJW: `AUT1Entity::TakeDamage` asks
+`UUT1CombatFeedbackSubsystem` to show every damage that actually landed, so enemies
+get numbers when the player hits them and the player gets numbers when an enemy hits,
+with no enemy-side code. Enemy attacks can also crit: `CriticalChance` (10%) and
+`CriticalMultiplier` (1.5x) are rolled per strike, and per projectile for ranged shots
+(`AEnemyProjectile::DamageTypeClass`). A crit is sent as CJW's
+`UUT1DamageType_Critical`, which is how the number knows to show as critical; the
+melee hit flash is also 1.5x larger on a crit.
+
 # Level
 
 `EnemyLevel` (1 = the values written in C++/BP) scales an enemy: each level adds

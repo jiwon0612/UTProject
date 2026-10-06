@@ -19,6 +19,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
 	float Speed = 1200.0f;
 
+	// 발사한 적이 정한 피해 종류임. 치명타면 UUT1DamageType_Critical이 들어와 데미지 숫자가 치명타로 뜸
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	TSubclassOf<class UDamageType> DamageTypeClass;
+
 	// 0이면 직선으로 날아감. 1이면 월드 중력을 받아 포물선을 그림
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile", meta = (ClampMin = "0.0"))
 	float GravityScale = 0.0f;
