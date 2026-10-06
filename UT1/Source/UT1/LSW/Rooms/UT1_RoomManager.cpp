@@ -517,8 +517,7 @@ void AUT1_RoomManager::MarkCurrentRoomCleared()
     }
 }
 
-const FRoomNode*
-AUT1_RoomManager::GetCurrentRoomNode() const
+const FRoomNode* AUT1_RoomManager::GetCurrentRoomNode() const
 {
     return FindRoomNode(CurrentRoomID);
 }
@@ -618,6 +617,11 @@ void AUT1_RoomManager::TryInteractPortal()
         return;
     }
 
+    if (!CurrentPortal->IsPlayerInRange())
+    {
+        return;
+    }
+
     if (!PortalWidgetClass)
     {
         return;
@@ -630,12 +634,9 @@ void AUT1_RoomManager::TryInteractPortal()
         );
 
     PortalWidget->AddToViewport();
-    PortalWidget->RefreshRoomList();
 
     PortalWidget->SetVisibility(
         ESlateVisibility::Visible);
-
-    PortalWidget->RefreshRoomList();
 }
 
 void AUT1_RoomManager::ClosePortalWidget()
