@@ -6,7 +6,7 @@
 
 class AEnemyProjectile;
 
-/** Medieval ranged enemy: keeps range and launches a projectile. */
+/** Medieval ranged caster: kites to keep range, fires bolts/bursts/volleys and repels close targets. */
 UCLASS(Blueprintable)
 class UT1_API ARangedEnemyCharacter : public AEnemyCharacter
 {

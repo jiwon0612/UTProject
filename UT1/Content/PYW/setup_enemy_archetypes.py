@@ -42,13 +42,15 @@ def configure_enemy(blueprint, locomotion, attacks, death):
     mesh.set_relative_location(unreal.Vector(0.0, 0.0, -90.0), False, False)
     mesh.set_relative_rotation(unreal.Rotator(pitch=0.0, yaw=-90.0, roll=0.0), False, False)
     cdo.set_editor_property("locomotion_animation", locomotion)
-    cdo.set_editor_property("attack_animation", attacks[0])
-    # Keep the C++ pattern tuning and only swap in the PYW animation copies.
-    patterns = list(cdo.get_editor_property("attack_patterns"))
-    require(len(patterns) == len(attacks), "Attack pattern count mismatch on " + blueprint.get_name())
-    for pattern, animation in zip(patterns, attacks):
-        pattern.set_editor_property("animation", animation)
-    cdo.set_editor_property("attack_patterns", patterns)
+    if attacks:
+        cdo.set_editor_property("attack_animation", attacks[0])
+        # Keep the C++ pattern tuning and only swap in the PYW animation copies for
+        # the leading patterns; extra patterns keep their C++ animations.
+        patterns = list(cdo.get_editor_property("attack_patterns"))
+        require(len(patterns) >= len(attacks), "Attack pattern count mismatch on " + blueprint.get_name())
+        for pattern, animation in zip(patterns, attacks):
+            pattern.set_editor_property("animation", animation)
+        cdo.set_editor_property("attack_patterns", patterns)
     cdo.set_editor_property("death_animation", death)
     unreal.BlueprintEditorLibrary.compile_blueprint(blueprint)
     require(unreal.EditorAssetLibrary.save_loaded_asset(blueprint, only_if_is_dirty=False), "Failed to save " + blueprint.get_name())
@@ -70,8 +72,15 @@ death_animation = ensure_animation_copy("AN_EnemyDeath", "/Game/Characters/Manne
 melee = ensure_blueprint("BP_MeleeEnemy", "/Script/UT1.MeleeEnemyCharacter")
 ranged = ensure_blueprint("BP_RangedEnemy", "/Script/UT1.RangedEnemyCharacter")
 projectile = ensure_blueprint("BP_EnemyProjectile", "/Script/UT1.EnemyProjectile")
+brute = ensure_blueprint("BP_BruteEnemy", "/Script/UT1.BruteEnemyCharacter")
+assassin = ensure_blueprint("BP_AssassinEnemy", "/Script/UT1.AssassinEnemyCharacter")
+bomber = ensure_blueprint("BP_BomberEnemy", "/Script/UT1.BomberEnemyCharacter")
 configure_enemy(melee, locomotion, melee_attacks, death_animation)
 configure_enemy(ranged, locomotion, ranged_attacks, death_animation)
+# New archetypes keep the Mannequin animations referenced by their C++ patterns.
+configure_enemy(brute, locomotion, None, death_animation)
+configure_enemy(assassin, locomotion, None, death_animation)
+configure_enemy(bomber, locomotion, None, death_animation)
 ranged_cdo = unreal.get_default_object(ranged.generated_class())
 ranged_cdo.set_editor_property("projectile_class", require(unreal.load_class(None, "/Script/UT1.EnemyProjectile"), "Missing native projectile class"))
 unreal.BlueprintEditorLibrary.compile_blueprint(ranged)
@@ -109,12 +118,20 @@ def place_test_enemy(label, enemy_class, offset):
 melee_actor = place_test_enemy("Enemy_Melee_Test", melee.generated_class(), unreal.Vector(140.0, -80.0, 50.0))
 ranged_actor = place_test_enemy("Enemy_Ranged_Test", ranged.generated_class(), unreal.Vector(650.0, 250.0, 50.0))
 death_actor = place_test_enemy("Enemy_Death_Test", melee.generated_class(), unreal.Vector(400.0, -400.0, 50.0))
+# Place the new archetypes farther out so alert, charge and lunge behavior is visible.
+brute_actor = place_test_enemy("Enemy_Brute_Test", brute.generated_class(), unreal.Vector(900.0, -600.0, 90.0))
+assassin_actor = place_test_enemy("Enemy_Assassin_Test", assassin.generated_class(), unreal.Vector(-700.0, 500.0, 50.0))
+bomber_actor = place_test_enemy("Enemy_Bomber_Test", bomber.generated_class(), unreal.Vector(1200.0, 300.0, 40.0))
 melee_actor.set_editor_property("test_death_delay", 0.0)
 ranged_actor.set_editor_property("test_death_delay", 0.0)
 death_actor.set_editor_property("test_death_delay", 1.0)
+for actor in (brute_actor, assassin_actor, bomber_actor):
+    actor.set_editor_property("test_death_delay", 0.0)
 
+TEST_LABELS = ("Enemy_Melee_Test", "Enemy_Ranged_Test", "Enemy_Death_Test",
+               "Enemy_Brute_Test", "Enemy_Assassin_Test", "Enemy_Bomber_Test")
 for actor in actors.get_all_level_actors():
-    if actor.get_actor_label() in ("Enemy_Melee_Test", "Enemy_Ranged_Test", "Enemy_Death_Test") or isinstance(actor, unreal.PlayerStart):
+    if actor.get_actor_label() in TEST_LABELS or isinstance(actor, unreal.PlayerStart):
         unreal.log("PYW_TEST_PLACEMENT Label={} Location={}".format(actor.get_actor_label(), actor.get_actor_location()))
 
 require(levels.save_current_level(), "Failed to save PYW test level")

@@ -11,6 +11,11 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	AttackRange = 900.0f;
 	WalkSpeed = 160.0f;
 	ChaseSpeed = 320.0f;
+	StrafeSpeed = 230.0f;
+	CombatMovement = EEnemyCombatMovement::Kite;
+	RetreatDistance = 320.0f;
+	PoiseThreshold = 20.0f;
+	ReactionTime = 0.6f;
 	ProjectileClass = AEnemyProjectile::StaticClass();
 
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> QuickCastAsset(
@@ -21,6 +26,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"));
 	AttackAnimation = QuickCastAsset.Object;
 
+	// 앞의 세 패턴은 AN_RangedQuickCast/Cast/PowerCast 순서와 맞춤. setup 스크립트가 순서대로 애니메이션을 교체함
 	// ImpactDelay는 QuickCast/Cast/PowerCast(1.00s/1.83s/1.67s) 모션의 발사 구간 기준임
 	AttackPatterns.Reset();
 
@@ -28,26 +34,45 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	MagicBolt.Name = TEXT("RangedMagicBolt");
 	MagicBolt.Animation = QuickCastAsset.Object;
 	MagicBolt.Damage = 12.0f;
-	MagicBolt.Cooldown = 1.3f;
+	MagicBolt.Cooldown = 0.6f;
 	MagicBolt.ImpactDelay = 0.35f;
+	MagicBolt.Weight = 3.0f;
 
 	FEnemyAttackPattern& TripleBurst = AttackPatterns.AddDefaulted_GetRef();
 	TripleBurst.Name = TEXT("RangedTripleBurst");
 	TripleBurst.Animation = RangedAttackAsset.Object;
 	TripleBurst.Damage = 6.0f;
-	TripleBurst.Cooldown = 2.1f;
+	TripleBurst.Cooldown = 0.8f;
 	TripleBurst.ImpactDelay = 0.7f;
 	TripleBurst.HitCount = 3;
 	TripleBurst.HitInterval = 0.18f;
+	TripleBurst.Weight = 2.0f;
 
 	FEnemyAttackPattern& SpreadVolley = AttackPatterns.AddDefaulted_GetRef();
 	SpreadVolley.Name = TEXT("RangedSpreadVolley");
 	SpreadVolley.Animation = PowerCastAsset.Object;
 	SpreadVolley.Damage = 5.0f;
-	SpreadVolley.Cooldown = 2.6f;
+	SpreadVolley.Cooldown = 1.0f;
 	SpreadVolley.ImpactDelay = 0.65f;
 	SpreadVolley.ProjectilesPerHit = 5;
 	SpreadVolley.SpreadAngle = 24.0f;
+	SpreadVolley.PatternCooldown = 3.0f;
+	SpreadVolley.Weight = 1.5f;
+
+	// 붙어 오는 대상을 밀쳐 내고 다시 거리를 벌리기 위한 근거리 폭발임
+	FEnemyAttackPattern& RepelNova = AttackPatterns.AddDefaulted_GetRef();
+	RepelNova.Name = TEXT("RangedRepelNova");
+	RepelNova.Animation = PowerCastAsset.Object;
+	RepelNova.Damage = 8.0f;
+	RepelNova.Cooldown = 0.6f;
+	RepelNova.ImpactDelay = 0.45f;
+	RepelNova.MaxRange = 180.0f;
+	RepelNova.AreaRadius = 240.0f;
+	RepelNova.KnockbackStrength = 650.0f;
+	RepelNova.KnockbackLift = 150.0f;
+	RepelNova.PatternCooldown = 6.0f;
+	RepelNova.Weight = 4.0f;
+	RepelNova.bSuperArmor = true;
 }
 
 bool ARangedEnemyCharacter::SpawnProjectileAtTarget(AActor* Target, float Damage, float YawOffsetDegrees)
@@ -71,6 +96,7 @@ bool ARangedEnemyCharacter::SpawnProjectileAtTarget(AActor* Target, float Damage
 
 bool ARangedEnemyCharacter::ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex)
 {
+	if (Pattern.AreaRadius > 0.0f) return ApplyStrikeHit(Target, Pattern, 180.0f);
 	if (!IsValid(Target) || !ProjectileClass) return false;
 
 	// 선딜 동안 대상이 움직였어도 발사 방향과 몸 방향이 어긋나지 않게 맞춤

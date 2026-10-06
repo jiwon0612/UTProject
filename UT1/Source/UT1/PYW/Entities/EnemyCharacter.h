@@ -4,13 +4,19 @@
 #include "CJW/Entities/UT1Entity.h"
 #include "EnemyCharacter.generated.h"
 
+// 새 상태는 뒤에만 추가함. 기존 값의 순서를 바꾸지 않기 위함
 UENUM(BlueprintType)
 enum class EEnemyAIState : uint8
 {
 	Idle,
 	Walk,
 	Chase,
-	Attack
+	Attack,
+	Alert,
+	Reposition,
+	Retreat,
+	Stagger,
+	Search
 };
 
 UENUM(BlueprintType)
@@ -20,7 +26,16 @@ enum class EEnemyCombatType : uint8
 	Ranged
 };
 
-/** 공격 1종의 모션, 수치, 타격 방식을 묶은 데이터임. AttackPatterns 배열 순서대로 순환함 */
+/** 공격 쿨다운 동안 대상 주변에서 움직이는 방식임 */
+UENUM(BlueprintType)
+enum class EEnemyCombatMovement : uint8
+{
+	HoldGround,	// 대상을 바라보며 천천히 압박함
+	Strafe,		// 대상 주위를 돌며 틈을 봄
+	Kite		// 너무 가까우면 물러나고, 아니면 옆으로 이동함
+};
+
+/** 공격 1종의 모션, 수치, 타격 방식을 묶은 데이터임. 지금 쓸 수 있는 패턴 중 가중치로 골라 씀 */
 USTRUCT(BlueprintType)
 struct FEnemyAttackPattern
 {
@@ -37,8 +52,9 @@ struct FEnemyAttackPattern
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
 	float Damage = 10.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.05"))
-	float Cooldown = 1.2f;
+	// 공격이 끝난 뒤 다음 공격까지 쉬는 시간임. 이 동안 CombatMovement대로 움직임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
+	float Cooldown = 0.5f;
 
 	// 공격 시작부터 첫 타격까지의 시간임. 모션의 타격 구간에 맞춤
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
@@ -51,20 +67,63 @@ struct FEnemyAttackPattern
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.01", EditCondition = "HitCount > 1"))
 	float HitInterval = 0.2f;
 
-	// 원거리 전용. 타격 1회에 동시에 발사하는 투사체 수임
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Ranged", meta = (ClampMin = "1"))
+	// 사용 가능한 패턴 중 선택될 확률 가중치임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Selection", meta = (ClampMin = "0.01"))
+	float Weight = 1.0f;
+
+	// 대상과의 간격(캡슐 표면 기준)이 이 범위 안일 때만 사용함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Selection", meta = (ClampMin = "0.0"))
+	float MinRange = 0.0f;
+
+	// 0이면 캐릭터의 AttackRange를 사용함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Selection", meta = (ClampMin = "0.0"))
+	float MaxRange = 0.0f;
+
+	// 이 패턴만 따로 다시 쓰기까지의 시간임. 돌진 같은 큰 기술을 연달아 쓰지 않게 함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Selection", meta = (ClampMin = "0.0"))
+	float PatternCooldown = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Selection")
+	bool bEnragedOnly = false;
+
+	// 공격 도중 피해를 받아도 경직되지 않음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Selection")
+	bool bSuperArmor = false;
+
+	// 공격 시작 후 이 시간이 지나면 대상 쪽으로 튀어 나감
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Lunge", meta = (ClampMin = "0.0"))
+	float LungeDelay = 0.0f;
+
+	// 수평 최대 속도임. 대상 앞에 착지하도록 체공 시간에 맞춰 줄어듦
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Lunge", meta = (ClampMin = "0.0"))
+	float LungeSpeed = 0.0f;
+
+	// 지면 마찰로 돌진이 바로 멈추지 않도록 띄우는 속도임. 크게 주면 도약 공격이 됨
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Lunge", meta = (ClampMin = "0.0"))
+	float LungeLift = 0.0f;
+
+	// 0보다 크면 방향과 무관하게 자신 주변 원형 범위로 판정함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0"))
+	float AreaRadius = 0.0f;
+
+	// 원거리 전용. 타격 1회에 동시에 발사하는 투사체 수임. AreaRadius가 있으면 무시함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "1"))
 	int32 ProjectilesPerHit = 1;
 
 	// 원거리 전용. 동시 발사 투사체가 퍼지는 전체 각도임
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Ranged", meta = (ClampMin = "0.0", ClampMax = "180.0", EditCondition = "ProjectilesPerHit > 1"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0", ClampMax = "180.0", EditCondition = "ProjectilesPerHit > 1"))
 	float SpreadAngle = 0.0f;
 
-	// 근접 전용. 0이면 넉백하지 않음
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Melee", meta = (ClampMin = "0.0"))
+	// 0이면 넉백하지 않음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0"))
 	float KnockbackStrength = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Melee", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0"))
 	float KnockbackLift = 0.0f;
+
+	// 마지막 타격 후 자신도 사망함 (자폭)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit")
+	bool bConsumesSelf = false;
 };
 
 UCLASS(Blueprintable)
@@ -95,10 +154,25 @@ public:
 	UPROPERTY()
 	TArray<TObjectPtr<class UAnimSequence>> AttackAnimations;
 
+	// 정면에서 맞고 죽을 때와, 방향별 모션이 비어 있을 때 사용함
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
 	TObjectPtr<class UAnimSequence> DeathAnimation;
 
-	float GetAttackDuration() const;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
+	TObjectPtr<class UAnimSequence> DeathBackAnimation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
+	TObjectPtr<class UAnimSequence> DeathLeftAnimation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
+	TObjectPtr<class UAnimSequence> DeathRightAnimation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
+	TObjectPtr<class UAnimSequence> HitReactAnimation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
+	TObjectPtr<class UAnimSequence> HitReactBackAnimation;
+
 	float GetAttackCooldownRemaining() const;
 	float GetChaseAcceptanceRadius() const;
 	FText GetCombatTypeText() const;
@@ -106,11 +180,37 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Combat")
 	EEnemyCombatType CombatType = EEnemyCombatType::Melee;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combat")
+	EEnemyCombatMovement CombatMovement = EEnemyCombatMovement::HoldGround;
+
+	// Kite 전용. 대상과의 간격이 이보다 가까우면 뒤로 물러남
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combat", meta = (ClampMin = "0.0"))
+	float RetreatDistance = 0.0f;
+
+	// AttackRange에 이 값을 더한 거리 안이면 쿨다운 동안 추격 대신 거리 조절을 함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combat", meta = (ClampMin = "0.0"))
+	float CombatBandPadding = 250.0f;
+
+	// 공격 간격이 기계적으로 보이지 않도록 쿨다운을 ±비율만큼 흔듦
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combat", meta = (ClampMin = "0.0", ClampMax = "0.9"))
+	float AttackCooldownVariance = 0.15f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
 	float DetectionRange = 1500.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
 	float LoseTargetRange = 2200.0f;
+
+	// 대상이 이 시간 이상 시야에서 사라지면 추적을 멈추고 마지막 위치를 수색함
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
+	float LoseSightTime = 3.0f;
+
+	// 대상을 발견한 뒤 경계하며 멈춰 있는 시간임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
+	float ReactionTime = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
+	float SearchDuration = 4.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI", meta = (ClampMin = "0.0"))
 	float AttackRange = 150.0f; // Horizontal reach beyond the characters' collision capsules.
@@ -127,6 +227,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Movement", meta = (ClampMin = "0.0"))
 	float ChaseSpeed = 380.0f;
 
+	// 거리 조절(Reposition/Retreat) 중 이동 속도임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Movement", meta = (ClampMin = "0.0"))
+	float StrafeSpeed = 200.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Health", meta = (ClampMin = "1.0"))
 	float MaxHealth = 100.0f;
 
@@ -139,12 +243,36 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Health", meta = (ClampMin = "0.0"))
 	float DeathCleanupDelay = 1.0f;
 
+	// PoiseRecoveryTime 안에 이만큼 피해가 쌓이면 경직됨. 0이면 경직되지 않음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Poise", meta = (ClampMin = "0.0"))
+	float PoiseThreshold = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Poise", meta = (ClampMin = "0.1"))
+	float PoiseRecoveryTime = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Poise", meta = (ClampMin = "0.1"))
+	float StaggerDuration = 0.6f;
+
+	// 체력 비율이 이 값 이하가 되면 격노함. 0이면 격노하지 않음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Enrage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float EnrageHealthRatio = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Enrage", meta = (ClampMin = "1.0"))
+	float EnrageSpeedMultiplier = 1.3f;
+
+	// 격노 중 공격 쿨다운에 곱하는 값임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Enrage", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	float EnrageCooldownMultiplier = 0.7f;
+
 	// Non-zero only on the dedicated PYW validation actor.
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Enemy|Debug", meta = (ClampMin = "0.0"))
 	float TestDeathDelay = 0.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Debug")
 	EEnemyAIState CurrentState = EEnemyAIState::Idle;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Debug")
+	bool bEnraged = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Debug")
 	int32 SuccessfulAttackCount = 0;
@@ -156,32 +284,74 @@ public:
 
 	bool IsTargetInAttackRange(const AActor* Target) const;
 
-	/** 공격 모션과 타격 판정이 모두 끝나기 전까지 true임 */
+	/** 두 캡슐 표면 사이의 수평 간격임. 높이 차가 커서 닿을 수 없으면 최대값을 돌려줌 */
+	float GetTargetGap(const AActor* Target) const;
+
+	/** 쿨다운이 끝났고 지금 거리에서 쓸 수 있는 패턴이 있으면 true임 */
+	bool CanStartAttack(const AActor* Target) const;
+
+	/** 쿨다운 동안 추격하지 않고 거리 조절을 할 만큼 가까우면 true임 */
+	bool IsInCombatBand(const AActor* Target) const;
+
+	/** 공격 모션, 돌진, 타격 판정이 하나라도 남아 있으면 true임 */
 	bool IsAttackInProgress() const;
 
-	/** 이동 회전 속도로 대상을 향해 돌아섬. 공격 모션 중에는 방향을 고정함 */
+	bool IsStaggered() const;
+	bool IsAlerting() const;
+
+	/** 대상을 새로 발견했을 때 ReactionTime 동안 경계 상태로 둠 */
+	void BeginAlert();
+
+	void MarkTargetSeen();
+	float GetTimeSinceTargetSeen() const;
+
+	/** 이동 회전 속도로 대상을 향해 돌아섬. 공격 중에는 방향을 고정함 */
 	void FaceTarget(const AActor* Target, float DeltaSeconds);
+
+	void TurnTowardsYaw(float TargetYaw, float DeltaSeconds, float DegreesPerSecond);
+
+	float GetMovementSpeedForState(EEnemyAIState State) const;
 
 private:
 	double NextAttackTime = 0.0;
-	double AttackAnimationEndTime = 0.0;
-	bool bPlayingAttackAnimation = false;
-	int32 NextAttackPatternIndex = 0;
+	double ActionAnimationEndTime = 0.0;
+	double StaggerEndTime = 0.0;
+	double AlertEndTime = 0.0;
+	double LastTargetSeenTime = 0.0;
+	double LastPoiseDamageTime = 0.0;
+	float AccumulatedPoiseDamage = 0.0f;
+	bool bPlayingActionAnimation = false;
+	int32 LastPatternIndex = INDEX_NONE;
+	TArray<double> PatternReadyTimes;
 	FTimerHandle AttackImpactTimer;
+	FTimerHandle LungeTimer;
 
 	// 공격 도중 AttackPatterns가 바뀌어도 진행 중인 공격이 흔들리지 않도록 복사본을 씀
 	UPROPERTY(Transient)
 	FEnemyAttackPattern ActivePattern;
 
 	void PlayLocomotionAnimation();
-	void SelectNextAttackPattern();
+	void PlayActionAnimation(class UAnimSequence* Animation, float MaxDuration = 0.0f);
+	bool IsPatternUsable(int32 PatternIndex, float Gap) const;
+	int32 ChooseAttackPattern(const AActor* Target) const;
+	float GetAttackRecoveryTime() const;
 	void MigrateLegacyAttackAnimations();
 	void ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int32 HitIndex);
+	void PerformLunge(TWeakObjectPtr<AActor> WeakTarget);
+	void CancelActiveAttack();
+	void Stagger(const AActor* Source);
+	void Enrage();
+	class UAnimSequence* SelectDirectionalAnimation(const AActor* Source, class UAnimSequence* Front,
+		class UAnimSequence* Back, class UAnimSequence* Left, class UAnimSequence* Right) const;
 	void Die(AController* Killer, AActor* DamageCauser);
+	void ShowDebugText(const FString& Text, const FColor& Color);
 
 protected:
 	/** 타격 1회를 처리함. HitIndex는 HitCount 중 몇 번째 판정인지임 */
 	virtual bool ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex);
+
+	/** 근접/범위 타격 공통 처리임. AreaRadius가 있으면 원형, 없으면 사거리와 정면 각도로 판정함 */
+	bool ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& Pattern, float HalfAngleDegrees);
 
 public:
 

@@ -47,6 +47,56 @@ protected:
 };
 
 UCLASS()
+class UT1_API UEnemyBTDecorator_IsStaggered : public UBTDecorator
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTDecorator_IsStaggered();
+
+protected:
+	virtual bool CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const override;
+};
+
+UCLASS()
+class UT1_API UEnemyBTDecorator_IsAlerting : public UBTDecorator
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTDecorator_IsAlerting();
+
+protected:
+	virtual bool CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const override;
+};
+
+/** 공격 쿨다운 중이고 대상이 교전 거리 안이면 추격 대신 거리 조절을 함 */
+UCLASS()
+class UT1_API UEnemyBTDecorator_InCombatBand : public UBTDecorator
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTDecorator_InCombatBand();
+
+protected:
+	virtual bool CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const override;
+};
+
+/** 대상을 놓쳤고 마지막으로 본 위치가 남아 있으면 수색함 */
+UCLASS()
+class UT1_API UEnemyBTDecorator_HasLastKnownLocation : public UBTDecorator
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTDecorator_HasLastKnownLocation();
+
+protected:
+	virtual bool CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const override;
+};
+
+UCLASS()
 class UT1_API UEnemyBTTask_FindPatrolPoint : public UBTTaskNode
 {
 	GENERATED_BODY()
@@ -126,6 +176,64 @@ protected:
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 };
 
+/** 쿨다운 동안 CombatMovement에 따라 압박, 선회, 후퇴함 */
+UCLASS()
+class UT1_API UEnemyBTTask_Reposition : public UBTTaskNode
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTTask_Reposition();
+
+protected:
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+	virtual uint16 GetInstanceMemorySize() const override;
+};
+
+UCLASS()
+class UT1_API UEnemyBTTask_Alert : public UBTTaskNode
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTTask_Alert();
+
+protected:
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+};
+
+UCLASS()
+class UT1_API UEnemyBTTask_Stagger : public UBTTaskNode
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTTask_Stagger();
+
+protected:
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+};
+
+/** 마지막으로 본 위치까지 이동한 뒤 주위를 둘러보고, 못 찾으면 순찰로 돌아감 */
+UCLASS()
+class UT1_API UEnemyBTTask_Search : public UBTTaskNode
+{
+	GENERATED_BODY()
+
+public:
+	UEnemyBTTask_Search();
+
+protected:
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+	virtual uint16 GetInstanceMemorySize() const override;
+};
+
 UCLASS()
 class UT1_API UEnemyBTTask_Idle : public UBTTaskNode
 {
@@ -139,5 +247,4 @@ protected:
 	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 	virtual uint16 GetInstanceMemorySize() const override;
 };
-
 

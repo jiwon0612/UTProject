@@ -4,7 +4,7 @@
 #include "PYW/Entities/EnemyCharacter.h"
 #include "MeleeEnemyCharacter.generated.h"
 
-/** Medieval melee enemy: closes distance and deals damage directly. */
+/** Medieval melee soldier: circles the target, mixes slashes, combos and a gap-closing lunge. */
 UCLASS(Blueprintable)
 class UT1_API AMeleeEnemyCharacter : public AEnemyCharacter
 {
@@ -19,7 +19,4 @@ public:
 
 protected:
 	virtual bool ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex) override;
-
-private:
-	bool IsTargetInStrikeArc(const AActor* Target) const;
 };

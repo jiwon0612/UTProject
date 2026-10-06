@@ -3,11 +3,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Engine/Engine.h"
 #include "Animation/AnimSingleNodeInstance.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
 #include "BrainComponent.h"
+#include "DrawDebugHelpers.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
@@ -19,13 +19,24 @@ AEnemyCharacter::AEnemyCharacter()
 	static ConstructorHelpers::FObjectFinder<UBlendSpace> MovementAsset(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/BS_Idle_Walk_Run"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> AttackAsset(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> DeathAsset(TEXT("/Game/Characters/Mannequins/Anims/Death/MM_Death_Front_01"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> DeathBackAsset(TEXT("/Game/Characters/Mannequins/Anims/Death/MM_Death_Back_01"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> DeathLeftAsset(TEXT("/Game/Characters/Mannequins/Anims/Death/MM_Death_Left_01"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> DeathRightAsset(TEXT("/Game/Characters/Mannequins/Anims/Death/MM_Death_Right_01"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> HitReactAsset(TEXT("/Game/Characters/Mannequins/Anims/Rifle/HitReact/MM_HitReact_Front_Med_01"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> HitReactBackAsset(TEXT("/Game/Characters/Mannequins/Anims/Rifle/HitReact/MM_HitReact_Back_Med_01"));
 	LocomotionAnimation = MovementAsset.Object;
 	AttackAnimation = AttackAsset.Object;
 	DeathAnimation = DeathAsset.Object;
+	DeathBackAnimation = DeathBackAsset.Object;
+	DeathLeftAnimation = DeathLeftAsset.Object;
+	DeathRightAnimation = DeathRightAsset.Object;
+	HitReactAnimation = HitReactAsset.Object;
+	HitReactBackAnimation = HitReactBackAsset.Object;
 
 	FEnemyAttackPattern& DefaultPattern = AttackPatterns.AddDefaulted_GetRef();
 	DefaultPattern.Name = TEXT("Default");
 	DefaultPattern.Animation = AttackAsset.Object;
+
 	AIControllerClass = AEnemyAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
@@ -60,7 +71,15 @@ void AEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	MigrateLegacyAttackAnimations();
+	if (AttackPatterns.IsEmpty())
+	{
+		FEnemyAttackPattern& Fallback = AttackPatterns.AddDefaulted_GetRef();
+		Fallback.Name = TEXT("Default");
+		Fallback.Animation = AttackAnimation;
+	}
+	PatternReadyTimes.SetNumZeroed(AttackPatterns.Num());
 	CurrentHealth = MaxHealth;
+	GetCharacterMovement()->MaxWalkSpeed = GetMovementSpeedForState(CurrentState);
 	PlayLocomotionAnimation();
 	if (TestDeathDelay > 0.0f)
 	{
@@ -97,6 +116,25 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, const FDamageEvent& Damage
 			AI->SetTargetActor(InstigatorPawn);
 		}
 	}
+
+	if (!bEnraged && EnrageHealthRatio > 0.0f && CurrentHealth <= MaxHealth * EnrageHealthRatio)
+	{
+		Enrage();
+	}
+
+	if (PoiseThreshold > 0.0f)
+	{
+		const double Now = GetWorld()->GetTimeSeconds();
+		if (Now - LastPoiseDamageTime > PoiseRecoveryTime) AccumulatedPoiseDamage = 0.0f;
+		AccumulatedPoiseDamage += AppliedDamage;
+		LastPoiseDamageTime = Now;
+		const bool bArmored = IsAttackInProgress() && ActivePattern.bSuperArmor;
+		if (AccumulatedPoiseDamage >= PoiseThreshold && !bArmored && !IsStaggered())
+		{
+			const AActor* Source = DamageCauser ? DamageCauser : static_cast<AActor*>(InstigatorPawn);
+			Stagger(Source);
+		}
+	}
 	return AppliedDamage;
 }
 
@@ -105,8 +143,8 @@ void AEnemyCharacter::Die(AController* Killer, AActor* DamageCauser)
 	if (bDead) return;
 	bDead = true;
 	CurrentHealth = 0.0f;
-	bPlayingAttackAnimation = false;
-	// 대기 중인 타격, 연타, 연사 타이머가 사망 후 발동하지 않도록 정리함
+	bPlayingActionAnimation = false;
+	// 대기 중인 타격, 연타, 돌진 타이머가 사망 후 발동하지 않도록 정리함
 	GetWorldTimerManager().ClearAllTimersForObject(this);
 
 	if (AEnemyAIController* AI = Cast<AEnemyAIController>(GetController()))
@@ -118,57 +156,73 @@ void AEnemyCharacter::Die(AController* Killer, AActor* DamageCauser)
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
+	const AActor* Source = DamageCauser;
+	if (!Source && Killer) Source = Killer->GetPawn();
+	UAnimSequence* ChosenDeath = Source && Source != this
+		? SelectDirectionalAnimation(Source, DeathAnimation, DeathBackAnimation, DeathLeftAnimation, DeathRightAnimation)
+		: DeathAnimation.Get();
+
 	float DeathDuration = 0.0f;
-	if (DeathAnimation)
+	if (ChosenDeath)
 	{
-		GetMesh()->PlayAnimation(DeathAnimation, false);
-		DeathDuration = DeathAnimation->GetPlayLength();
+		GetMesh()->PlayAnimation(ChosenDeath, false);
+		DeathDuration = ChosenDeath->GetPlayLength();
 	}
 	SetLifeSpan(FMath::Max(0.1f, DeathDuration + DeathCleanupDelay));
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_DEATH Actor=%s Animation=%s Duration=%.2f Causer=%s"),
-		*GetName(), *GetNameSafe(DeathAnimation), DeathDuration, *GetNameSafe(DamageCauser));
+		*GetName(), *GetNameSafe(ChosenDeath), DeathDuration, *GetNameSafe(DamageCauser));
+}
+
+UAnimSequence* AEnemyCharacter::SelectDirectionalAnimation(const AActor* Source, UAnimSequence* Front,
+	UAnimSequence* Back, UAnimSequence* Left, UAnimSequence* Right) const
+{
+	UAnimSequence* Result = Front;
+	if (IsValid(Source))
+	{
+		const FVector ToSource = (Source->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
+		const float ForwardDot = FVector::DotProduct(GetActorForwardVector(), ToSource);
+		const float RightDot = FVector::DotProduct(GetActorRightVector(), ToSource);
+		if (FMath::Abs(ForwardDot) >= FMath::Abs(RightDot))
+		{
+			if (ForwardDot < 0.0f && Back) Result = Back;
+		}
+		else if (RightDot > 0.0f && Right)
+		{
+			Result = Right;
+		}
+		else if (RightDot < 0.0f && Left)
+		{
+			Result = Left;
+		}
+	}
+	return Result ? Result : Front;
 }
 
 void AEnemyCharacter::PlayLocomotionAnimation()
 {
 	if (LocomotionAnimation) GetMesh()->PlayAnimation(LocomotionAnimation, true);
-	bPlayingAttackAnimation = false;
+	bPlayingActionAnimation = false;
 }
 
-void AEnemyCharacter::SelectNextAttackPattern()
+void AEnemyCharacter::PlayActionAnimation(UAnimSequence* Animation, float MaxDuration)
 {
-	if (AttackPatterns.IsEmpty())
-	{
-		ActivePattern = FEnemyAttackPattern();
-	}
-	else
-	{
-		const int32 PatternIndex = NextAttackPatternIndex % AttackPatterns.Num();
-		NextAttackPatternIndex = (PatternIndex + 1) % AttackPatterns.Num();
-		ActivePattern = AttackPatterns[PatternIndex];
-	}
-	if (!ActivePattern.Animation) ActivePattern.Animation = AttackAnimation;
-	ActiveAttackName = ActivePattern.Name.ToString();
-}
-
-float AEnemyCharacter::GetAttackDuration() const
-{
-	// 다음 공격이 이전 공격의 남은 타격과 겹치지 않도록 마지막 타격 시점까지 포함함
-	const float LastHitTime = ActivePattern.ImpactDelay
-		+ (FMath::Max(ActivePattern.HitCount, 1) - 1) * FMath::Max(ActivePattern.HitInterval, 0.01f);
-	const float AnimationLength = ActivePattern.Animation ? ActivePattern.Animation->GetPlayLength() : 0.0f;
-	return FMath::Max3(FMath::Max(ActivePattern.Cooldown, 0.05f), AnimationLength, LastHitTime);
+	if (!Animation) return;
+	GetMesh()->PlayAnimation(Animation, false);
+	bPlayingActionAnimation = true;
+	float Duration = Animation->GetPlayLength();
+	if (MaxDuration > 0.0f) Duration = FMath::Min(Duration, MaxDuration);
+	ActionAnimationEndTime = GetWorld()->GetTimeSeconds() + Duration;
 }
 
 void AEnemyCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (bDead) return;
-	if (bPlayingAttackAnimation && GetWorld()->GetTimeSeconds() >= AttackAnimationEndTime)
+	if (bPlayingActionAnimation && GetWorld()->GetTimeSeconds() >= ActionAnimationEndTime)
 	{
 		PlayLocomotionAnimation();
 	}
-	if (!bPlayingAttackAnimation)
+	if (!bPlayingActionAnimation)
 	{
 		if (UAnimSingleNodeInstance* Animation = GetMesh()->GetSingleNodeInstance())
 		{
@@ -188,32 +242,154 @@ void AEnemyCharacter::Destroyed()
 	Super::Destroyed();
 }
 
-bool AEnemyCharacter::IsTargetInAttackRange(const AActor* Target) const
+float AEnemyCharacter::GetTargetGap(const AActor* Target) const
 {
-	if (!IsValid(Target) || Target == this) return false;
+	if (!IsValid(Target) || Target == this) return TNumericLimits<float>::Max();
 	const ACharacter* TargetCharacter = Cast<ACharacter>(Target);
 	const UCapsuleComponent* TargetCapsule = TargetCharacter ? TargetCharacter->GetCapsuleComponent() : nullptr;
 	const float TargetRadius = TargetCapsule ? TargetCapsule->GetScaledCapsuleRadius() : 0.0f;
 	const float TargetHalfHeight = TargetCapsule ? TargetCapsule->GetScaledCapsuleHalfHeight() : 0.0f;
-	const float Reach = FMath::Max(AttackRange, 0.0f) + GetCapsuleComponent()->GetScaledCapsuleRadius() + TargetRadius;
 	const FVector Offset = Target->GetActorLocation() - GetActorLocation();
-	return Offset.SizeSquared2D() <= FMath::Square(Reach)
-		&& FMath::Abs(Offset.Z) <= GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + TargetHalfHeight;
+	if (FMath::Abs(Offset.Z) > GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + TargetHalfHeight)
+	{
+		return TNumericLimits<float>::Max();
+	}
+	return FMath::Max(0.0f, static_cast<float>(Offset.Size2D()) - GetCapsuleComponent()->GetScaledCapsuleRadius() - TargetRadius);
+}
+
+bool AEnemyCharacter::IsTargetInAttackRange(const AActor* Target) const
+{
+	return GetTargetGap(Target) <= FMath::Max(AttackRange, 0.0f);
+}
+
+bool AEnemyCharacter::IsInCombatBand(const AActor* Target) const
+{
+	return GetTargetGap(Target) <= FMath::Max(AttackRange, 0.0f) + CombatBandPadding;
+}
+
+bool AEnemyCharacter::IsPatternUsable(int32 PatternIndex, float Gap) const
+{
+	if (!AttackPatterns.IsValidIndex(PatternIndex)) return false;
+	const FEnemyAttackPattern& Pattern = AttackPatterns[PatternIndex];
+	if (Pattern.bEnragedOnly && !bEnraged) return false;
+	if (PatternReadyTimes.IsValidIndex(PatternIndex) && GetWorld()->GetTimeSeconds() < PatternReadyTimes[PatternIndex])
+	{
+		return false;
+	}
+	const float MaxRange = Pattern.MaxRange > 0.0f ? Pattern.MaxRange : AttackRange;
+	return Gap >= Pattern.MinRange && Gap <= MaxRange;
+}
+
+int32 AEnemyCharacter::ChooseAttackPattern(const AActor* Target) const
+{
+	const float Gap = GetTargetGap(Target);
+	// 같은 패턴이 연달아 나오지 않도록 직전 패턴의 가중치를 낮춤
+	auto SelectionWeight = [this](int32 Index)
+	{
+		float Weight = FMath::Max(AttackPatterns[Index].Weight, 0.01f);
+		if (Index == LastPatternIndex && AttackPatterns.Num() > 1) Weight *= 0.35f;
+		return Weight;
+	};
+
+	float TotalWeight = 0.0f;
+	int32 LastUsable = INDEX_NONE;
+	for (int32 Index = 0; Index < AttackPatterns.Num(); ++Index)
+	{
+		if (!IsPatternUsable(Index, Gap)) continue;
+		TotalWeight += SelectionWeight(Index);
+		LastUsable = Index;
+	}
+	if (LastUsable == INDEX_NONE) return INDEX_NONE;
+
+	float Roll = FMath::FRand() * TotalWeight;
+	for (int32 Index = 0; Index < AttackPatterns.Num(); ++Index)
+	{
+		if (!IsPatternUsable(Index, Gap)) continue;
+		Roll -= SelectionWeight(Index);
+		if (Roll <= 0.0f) return Index;
+	}
+	return LastUsable;
+}
+
+bool AEnemyCharacter::CanStartAttack(const AActor* Target) const
+{
+	if (bDead || IsStaggered() || IsAttackInProgress() || GetWorld()->GetTimeSeconds() < NextAttackTime) return false;
+	const float Gap = GetTargetGap(Target);
+	for (int32 Index = 0; Index < AttackPatterns.Num(); ++Index)
+	{
+		if (IsPatternUsable(Index, Gap)) return true;
+	}
+	return false;
 }
 
 bool AEnemyCharacter::IsAttackInProgress() const
 {
-	return bPlayingAttackAnimation || GetWorldTimerManager().IsTimerActive(AttackImpactTimer);
+	return bPlayingActionAnimation
+		|| GetWorldTimerManager().IsTimerActive(AttackImpactTimer)
+		|| GetWorldTimerManager().IsTimerActive(LungeTimer);
+}
+
+bool AEnemyCharacter::IsStaggered() const
+{
+	return !bDead && GetWorld()->GetTimeSeconds() < StaggerEndTime;
+}
+
+bool AEnemyCharacter::IsAlerting() const
+{
+	return !bDead && GetWorld()->GetTimeSeconds() < AlertEndTime;
+}
+
+void AEnemyCharacter::BeginAlert()
+{
+	if (bDead || ReactionTime <= 0.0f) return;
+	AlertEndTime = GetWorld()->GetTimeSeconds() + ReactionTime;
+	SetAIState(EEnemyAIState::Alert);
+	ShowDebugText(TEXT("!"), FColor::Yellow);
+}
+
+void AEnemyCharacter::MarkTargetSeen()
+{
+	LastTargetSeenTime = GetWorld()->GetTimeSeconds();
+}
+
+float AEnemyCharacter::GetTimeSinceTargetSeen() const
+{
+	return static_cast<float>(GetWorld()->GetTimeSeconds() - LastTargetSeenTime);
+}
+
+void AEnemyCharacter::TurnTowardsYaw(float TargetYaw, float DeltaSeconds, float DegreesPerSecond)
+{
+	const FRotator Desired(0.0f, TargetYaw, 0.0f);
+	SetActorRotation(FMath::RInterpConstantTo(GetActorRotation(), Desired, DeltaSeconds, DegreesPerSecond));
 }
 
 void AEnemyCharacter::FaceTarget(const AActor* Target, float DeltaSeconds)
 {
-	if (bDead || !IsValid(Target) || IsAttackInProgress()) return;
+	if (bDead || !IsValid(Target) || IsAttackInProgress() || IsStaggered()) return;
 	const FVector Offset = Target->GetActorLocation() - GetActorLocation();
 	if (Offset.SizeSquared2D() <= KINDA_SMALL_NUMBER) return;
-	const FRotator Desired(0.0f, Offset.Rotation().Yaw, 0.0f);
-	SetActorRotation(FMath::RInterpConstantTo(GetActorRotation(), Desired, DeltaSeconds,
-		static_cast<float>(GetCharacterMovement()->RotationRate.Yaw)));
+	TurnTowardsYaw(Offset.Rotation().Yaw, DeltaSeconds, static_cast<float>(GetCharacterMovement()->RotationRate.Yaw));
+}
+
+float AEnemyCharacter::GetMovementSpeedForState(EEnemyAIState State) const
+{
+	float Speed = WalkSpeed;
+	switch (State)
+	{
+	case EEnemyAIState::Chase:
+		Speed = ChaseSpeed;
+		break;
+	case EEnemyAIState::Reposition:
+	case EEnemyAIState::Retreat:
+		Speed = StrafeSpeed;
+		break;
+	case EEnemyAIState::Search:
+		Speed = FMath::Lerp(WalkSpeed, ChaseSpeed, 0.4f);
+		break;
+	default:
+		break;
+	}
+	return Speed * (bEnraged ? EnrageSpeedMultiplier : 1.0f);
 }
 
 float AEnemyCharacter::GetAttackCooldownRemaining() const
@@ -231,19 +407,60 @@ FText AEnemyCharacter::GetCombatTypeText() const
 	return CombatType == EEnemyCombatType::Ranged ? FText::FromString(TEXT("원거리")) : FText::FromString(TEXT("근접"));
 }
 
+float AEnemyCharacter::GetAttackRecoveryTime() const
+{
+	const float LastHitTime = ActivePattern.ImpactDelay
+		+ (FMath::Max(ActivePattern.HitCount, 1) - 1) * FMath::Max(ActivePattern.HitInterval, 0.01f);
+	const float AnimationLength = ActivePattern.Animation ? ActivePattern.Animation->GetPlayLength() : 0.0f;
+	float Cooldown = FMath::Max(ActivePattern.Cooldown, 0.0f) * (bEnraged ? EnrageCooldownMultiplier : 1.0f);
+	Cooldown *= FMath::FRandRange(1.0f - AttackCooldownVariance, 1.0f + AttackCooldownVariance);
+	return FMath::Max(AnimationLength, LastHitTime) + Cooldown;
+}
+
+bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& Pattern, float HalfAngleDegrees)
+{
+	if (!IsValid(Target)) return false;
+	if (Pattern.AreaRadius > 0.0f)
+	{
+		if (GetTargetGap(Target) > Pattern.AreaRadius) return false;
+	}
+	else
+	{
+		// 타격 시점에 다시 검사해서 선딜 동안 거리를 벌리거나 옆으로 돌면 피할 수 있게 함
+		if (!IsTargetInAttackRange(Target)) return false;
+		const FVector ToTarget = (Target->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
+		if (!ToTarget.IsNearlyZero() && HalfAngleDegrees < 180.0f)
+		{
+			const FVector Forward = GetActorForwardVector().GetSafeNormal2D();
+			if (FVector::DotProduct(Forward, ToTarget) < FMath::Cos(FMath::DegreesToRadians(HalfAngleDegrees))) return false;
+		}
+	}
+
+	UGameplayStatics::ApplyDamage(Target, Pattern.Damage, GetController(), this, UDamageType::StaticClass());
+	if ((Pattern.KnockbackStrength > 0.0f || Pattern.KnockbackLift > 0.0f) && IsValid(Target))
+	{
+		if (ACharacter* TargetCharacter = Cast<ACharacter>(Target))
+		{
+			const FVector Knockback = (Target->GetActorLocation() - GetActorLocation()).GetSafeNormal2D() * Pattern.KnockbackStrength
+				+ FVector(0.0f, 0.0f, Pattern.KnockbackLift);
+			TargetCharacter->LaunchCharacter(Knockback, true, true);
+			UE_LOG(LogTemp, Display, TEXT("ENEMY_KNOCKBACK Enemy=%s Target=%s Pattern=%s"),
+				*GetName(), *GetNameSafe(Target), *Pattern.Name.ToString());
+		}
+	}
+	return true;
+}
+
 bool AEnemyCharacter::ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex)
 {
-	// 타격 시점에 다시 검사해서 선딜 동안 거리를 벌리면 회피할 수 있게 함
-	if (!IsTargetInAttackRange(Target)) return false;
-	UGameplayStatics::ApplyDamage(Target, Pattern.Damage, GetController(), this, UDamageType::StaticClass());
-	return true;
+	return ApplyStrikeHit(Target, Pattern, 180.0f);
 }
 
 void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int32 HitIndex)
 {
+	if (bDead) return;
 	AActor* Target = WeakTarget.Get();
-	if (bDead || !IsValid(Target)) return;
-	const bool bHit = ExecuteCombatAttack(Target, ActivePattern, HitIndex);
+	const bool bHit = IsValid(Target) && ExecuteCombatAttack(Target, ActivePattern, HitIndex);
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_ATTACK_IMPACT Actor=%s Pattern=%s Hit=%d/%d Target=%s Result=%s"),
 		*GetName(), *ActiveAttackName, HitIndex + 1, ActivePattern.HitCount, *GetNameSafe(Target), bHit ? TEXT("Hit") : TEXT("Miss"));
 
@@ -253,30 +470,129 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 		GetWorldTimerManager().SetTimer(AttackImpactTimer,
 			FTimerDelegate::CreateUObject(this, &AEnemyCharacter::ResolveAttackImpact, WeakTarget, HitIndex + 1),
 			FMath::Max(ActivePattern.HitInterval, 0.01f), false);
+		return;
 	}
+
+	if (ActivePattern.bConsumesSelf)
+	{
+		if (bShowAttackDebug && ActivePattern.AreaRadius > 0.0f)
+		{
+			DrawDebugSphere(GetWorld(), GetActorLocation(), ActivePattern.AreaRadius, 16, FColor::Orange, false, 0.6f);
+		}
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_SELF_DESTRUCT Actor=%s Hit=%s"), *GetName(), bHit ? TEXT("true") : TEXT("false"));
+		Die(GetController(), this);
+		// 폭발 연출이 없어 쓰러지는 모션 대신 바로 사라지게 함. BP_OnAttack에서 이펙트를 붙일 수 있음
+		SetActorHiddenInGame(true);
+		SetLifeSpan(0.2f);
+	}
+}
+
+void AEnemyCharacter::PerformLunge(TWeakObjectPtr<AActor> WeakTarget)
+{
+	if (bDead) return;
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	const float Gravity = FMath::Abs(Movement->GetGravityZ());
+	const float AirTime = ActivePattern.LungeLift > 0.0f && Gravity > KINDA_SMALL_NUMBER
+		? 2.0f * ActivePattern.LungeLift / Gravity : 0.25f;
+	float HorizontalSpeed = ActivePattern.LungeSpeed;
+
+	// 발동 순간 대상을 다시 조준하고, 대상 바로 앞에 떨어지도록 속도를 줄임
+	if (AActor* Target = WeakTarget.Get())
+	{
+		const FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+		if (ToTarget.SizeSquared2D() > KINDA_SMALL_NUMBER) SetActorRotation(FRotator(0.0f, ToTarget.Rotation().Yaw, 0.0f));
+		const float Gap = GetTargetGap(Target);
+		if (Gap < TNumericLimits<float>::Max()) HorizontalSpeed = FMath::Min(HorizontalSpeed, Gap / FMath::Max(AirTime, 0.05f));
+	}
+
+	FVector Launch = GetActorForwardVector().GetSafeNormal2D() * HorizontalSpeed;
+	Launch.Z = ActivePattern.LungeLift;
+	LaunchCharacter(Launch, true, true);
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_LUNGE Actor=%s Pattern=%s Speed=%.0f Lift=%.0f"),
+		*GetName(), *ActiveAttackName, HorizontalSpeed, ActivePattern.LungeLift);
+}
+
+void AEnemyCharacter::CancelActiveAttack()
+{
+	GetWorldTimerManager().ClearTimer(AttackImpactTimer);
+	GetWorldTimerManager().ClearTimer(LungeTimer);
+	bPlayingActionAnimation = false;
+}
+
+void AEnemyCharacter::Stagger(const AActor* Source)
+{
+	if (bDead) return;
+	const bool bInterrupted = IsAttackInProgress();
+	CancelActiveAttack();
+	AccumulatedPoiseDamage = 0.0f;
+	StaggerEndTime = GetWorld()->GetTimeSeconds() + StaggerDuration;
+
+	AEnemyAIController* AI = Cast<AEnemyAIController>(GetController());
+	if (AI) AI->StopMovement();
+	PlayActionAnimation(SelectDirectionalAnimation(Source, HitReactAnimation, HitReactBackAnimation, nullptr, nullptr), StaggerDuration);
+	SetAIState(EEnemyAIState::Stagger);
+	ShowDebugText(TEXT("경직"), FColor::Orange);
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_STAGGER Actor=%s Duration=%.2f InterruptedAttack=%s"),
+		*GetName(), StaggerDuration, bInterrupted ? *ActiveAttackName : TEXT("None"));
+
+	// 진행 중인 추격/공격/거리 조절 태스크를 끊고 경직 분기부터 다시 고르게 함
+	if (AI) AI->RestartBehavior();
+}
+
+void AEnemyCharacter::Enrage()
+{
+	bEnraged = true;
+	GetCharacterMovement()->MaxWalkSpeed = GetMovementSpeedForState(CurrentState);
+	ShowDebugText(TEXT("격노"), FColor::Magenta);
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_ENRAGE Actor=%s Health=%.1f/%.1f"), *GetName(), CurrentHealth, MaxHealth);
+}
+
+void AEnemyCharacter::ShowDebugText(const FString& Text, const FColor& Color)
+{
+	if (!bShowAttackDebug) return;
+	const FVector Offset(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 30.0f);
+	DrawDebugString(GetWorld(), Offset, Text, this, Color, 1.0f, true, 1.2f);
 }
 
 bool AEnemyCharacter::PerformAttack(AActor* Target)
 {
-	if (bDead || !IsTargetInAttackRange(Target) || GetWorld()->GetTimeSeconds() < NextAttackTime)
-	{
-		return false;
-	}
+	if (!CanStartAttack(Target)) return false;
+	const int32 PatternIndex = ChooseAttackPattern(Target);
+	if (PatternIndex == INDEX_NONE) return false;
+
+	const double Now = GetWorld()->GetTimeSeconds();
+	ActivePattern = AttackPatterns[PatternIndex];
+	if (!ActivePattern.Animation) ActivePattern.Animation = AttackAnimation;
+	ActiveAttackName = ActivePattern.Name.ToString();
+	LastPatternIndex = PatternIndex;
+	if (PatternReadyTimes.Num() != AttackPatterns.Num()) PatternReadyTimes.SetNumZeroed(AttackPatterns.Num());
+	PatternReadyTimes[PatternIndex] = Now + ActivePattern.PatternCooldown;
 
 	const FVector Direction = Target->GetActorLocation() - GetActorLocation();
 	if (AEnemyAIController* AI = Cast<AEnemyAIController>(GetController())) AI->StopMovement();
 	SetActorRotation(FRotator(0.0f, Direction.Rotation().Yaw, 0.0f));
-	SelectNextAttackPattern();
-	NextAttackTime = GetWorld()->GetTimeSeconds() + GetAttackDuration();
+	NextAttackTime = Now + GetAttackRecoveryTime();
 	if (UAnimSequence* Animation = ActivePattern.Animation)
 	{
-		GetMesh()->PlayAnimation(Animation, false);
-		bPlayingAttackAnimation = true;
-		AttackAnimationEndTime = GetWorld()->GetTimeSeconds() + Animation->GetPlayLength();
+		PlayActionAnimation(Animation);
 		UE_LOG(LogTemp, Display, TEXT("ENEMY_ANIMATION Attack=%s Duration=%.2f"), *Animation->GetName(), Animation->GetPlayLength());
 	}
 	BP_OnAttack(Target);
+
 	const TWeakObjectPtr<AActor> WeakTarget(Target);
+	const bool bLunges = ActivePattern.LungeSpeed > 0.0f || ActivePattern.LungeLift > 0.0f;
+	if (bLunges)
+	{
+		if (ActivePattern.LungeDelay > 0.0f)
+		{
+			GetWorldTimerManager().SetTimer(LungeTimer,
+				FTimerDelegate::CreateUObject(this, &AEnemyCharacter::PerformLunge, WeakTarget), ActivePattern.LungeDelay, false);
+		}
+		else
+		{
+			PerformLunge(WeakTarget);
+		}
+	}
 	if (ActivePattern.ImpactDelay > 0.0f)
 	{
 		GetWorldTimerManager().SetTimer(AttackImpactTimer,
@@ -286,15 +602,22 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	{
 		ResolveAttackImpact(WeakTarget, 0);
 	}
-	UE_LOG(LogTemp, Display, TEXT("ENEMY_ATTACK_PATTERN Actor=%s Pattern=%s Damage=%.1f Cooldown=%.2f ImpactDelay=%.2f Hits=%d"),
-		*GetName(), *ActiveAttackName, ActivePattern.Damage, ActivePattern.Cooldown, ActivePattern.ImpactDelay, ActivePattern.HitCount);
-	++SuccessfulAttackCount;
-	if (bShowAttackDebug)
+
+	// 범위 공격은 떨어질 자리를 미리 보여 줘서 피할 수 있게 함
+	if (bShowAttackDebug && ActivePattern.AreaRadius > 0.0f)
 	{
-		const FString DebugText = FString::Printf(TEXT("%s 공격"), *GetCombatTypeText().ToString());
-		if (GEngine) GEngine->AddOnScreenDebugMessage(static_cast<uint64>(GetUniqueID()), 1.0f, FColor::Red, DebugText);
-		UE_LOG(LogTemp, Display, TEXT("%s Enemy=%s Target=%s"), *DebugText, *GetName(), *GetNameSafe(Target));
+		const FVector Center = (bLunges ? Target->GetActorLocation() : GetActorLocation())
+			- FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - 5.0f);
+		DrawDebugCircle(GetWorld(), Center, ActivePattern.AreaRadius, 32, FColor::Orange, false,
+			FMath::Max(ActivePattern.ImpactDelay, 0.1f), 0, 3.0f, FVector(1.0f, 0.0f, 0.0f), FVector(0.0f, 1.0f, 0.0f), false);
 	}
+
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_ATTACK_PATTERN Actor=%s Pattern=%s Damage=%.1f Cooldown=%.2f ImpactDelay=%.2f Hits=%d Enraged=%s"),
+		*GetName(), *ActiveAttackName, ActivePattern.Damage, ActivePattern.Cooldown, ActivePattern.ImpactDelay,
+		ActivePattern.HitCount, bEnraged ? TEXT("true") : TEXT("false"));
+	++SuccessfulAttackCount;
+	ShowDebugText(ActiveAttackName, FColor::Red);
+	UE_LOG(LogTemp, Display, TEXT("%s 공격 Enemy=%s Target=%s"), *GetCombatTypeText().ToString(), *GetName(), *GetNameSafe(Target));
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_BT_TEST AttackSucceeded Actor=%s Count=%d Target=%s"),
 		*GetName(), SuccessfulAttackCount, *GetNameSafe(Target));
 	return true;
@@ -311,7 +634,10 @@ void AEnemyCharacter::SetAIState(EEnemyAIState NewState)
 	const FString PreviousState = StaticEnum<EEnemyAIState>()->GetNameStringByValue(static_cast<int64>(CurrentState));
 	const FString NextState = StaticEnum<EEnemyAIState>()->GetNameStringByValue(static_cast<int64>(NewState));
 	CurrentState = NewState;
-	GetCharacterMovement()->MaxWalkSpeed = NewState == EEnemyAIState::Chase ? ChaseSpeed : WalkSpeed;
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Movement->MaxWalkSpeed = GetMovementSpeedForState(NewState);
+	// 거리 조절 중에는 이동 방향이 아니라 대상을 바라보며 옆걸음/뒷걸음함
+	Movement->bOrientRotationToMovement = NewState != EEnemyAIState::Reposition && NewState != EEnemyAIState::Retreat;
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_BT_TEST StateChanged Actor=%s From=%s To=%s"),
 		*GetName(), *PreviousState, *NextState);
 }
