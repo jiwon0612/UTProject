@@ -9,6 +9,15 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimInstance.h"
 #include "UT1/CJW/Weapons/UT1WeaponData.h"
+#include "CJW/Weapons/UT1Weapon.h"
+#include "Engine/World.h"
+#include "UT1.h"
+
+// 무기가 붙을 소켓 이름. FEquipmentData::bIsRightHanded 가 둘 중 하나를 고른다.
+// 스켈레톤과의 약속이라, 무기를 드는 적을 추가할 때도 그 스켈레톤에 같은
+// 이름의 소켓을 만들어 두어야 코드가 상대를 구분하지 않아도 된다.
+static const FName WeaponSocket_Right(TEXT("Hand_R"));
+static const FName WeaponSocket_Left(TEXT("Hand_L"));
 
 AUT1Player::AUT1Player()
 {
@@ -58,6 +67,178 @@ void AUT1Player::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	}
 }
 
+void AUT1Player::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// TestWeaponData 는 에디터(BP_Player)에서 지정하는 시작 무기다.
+	// 상점이나 획득으로 무기를 바꿀 때도 같은 EquipWeaponData 를 쓰면 된다.
+	EquipWeaponData(TestWeaponData);
+}
+
+void AUT1Player::EquipWeaponData(UUT1WeaponData* NewWeaponData)
+{
+	// 콤보 도중에 무기가 바뀌면 ComboIndex 가 새 무기의 시퀀스를 가리켜
+	// 엉뚱한 단계가 재생된다. 재생 중인 몽타주를 먼저 끊고 상태를 되돌린다.
+	if (CurrentComboMontage != nullptr)
+	{
+		if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			Anim->Montage_Stop(0.1f, CurrentComboMontage);
+		}
+	}
+	ComboReset();
+
+	ClearEquippedWeapons();
+	CurrentWeaponData = NewWeaponData;
+
+	if (CurrentWeaponData == nullptr)
+	{
+		return;   // 맨손 상태
+	}
+
+	USkeletalMeshComponent* OwnerMesh = GetMesh();
+	if (OwnerMesh == nullptr)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	for (const FEquipmentData& Equip : CurrentWeaponData->EquipMeshes)
+	{
+		if (Equip.WeaponClass == nullptr)
+		{
+			continue;
+		}
+
+		const FName SocketName = Equip.bIsRightHanded ? WeaponSocket_Right : WeaponSocket_Left;
+
+		// 소켓 이름이 틀리면 AttachToComponent 는 경고 없이 캐릭터 원점에
+		// 붙여 버린다. 무기가 발밑에 누워 있는 증상의 원인이라 미리 걸러 둔다.
+		if (OwnerMesh->DoesSocketExist(SocketName) == false)
+		{
+			UE_LOG(LogUT1, Warning,
+				TEXT("[Equip] 소켓 '%s' 를 찾지 못해 '%s' 를 장착하지 않습니다."),
+				*SocketName.ToString(), *Equip.WeaponClass->GetName());
+			continue;
+		}
+
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.Instigator = this;
+		// 무기는 캐릭터 몸 안쪽에 생성된다. 기본 겹침 처리를 그대로 두면
+		// 위치가 밀리거나 스폰 자체가 취소된다.
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		AUT1Weapon* Weapon = World->SpawnActor<AUT1Weapon>(Equip.WeaponClass, Params);
+		if (Weapon == nullptr)
+		{
+			continue;
+		}
+
+		// 소켓에 스냅되는 것은 무기의 GripRoot 다.
+		// 손잡이를 GripRoot 에 맞추는 것은 무기 BP 의 책임이므로,
+		// 여기서는 무기별 보정값을 알 필요가 없다.
+		Weapon->AttachToComponent(
+			OwnerMesh,
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			SocketName);
+
+		EquippedWeapons.Add(Weapon);
+	}
+}
+
+void AUT1Player::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 부착된 액터는 부모가 파괴돼도 따라 사라지지 않는다.
+	// 정리하지 않으면 플레이어가 죽은 뒤 무기만 월드에 남는다.
+	ClearEquippedWeapons();
+
+	Super::EndPlay(EndPlayReason);
+}
+
+void AUT1Player::HandleDeath(AActor* Killer)
+{
+	// 베이스보다 먼저 정리한다. 베이스가 사망 몽타주를 재생하면서
+	// 콤보 몽타주를 밀어내면 OnMontageEnd 가 bInterrupted 로 들어와
+	// 판정이 켜진 채 남을 수 있다.
+	StopWeaponTrace();
+
+	if (CurrentComboMontage != nullptr)
+	{
+		if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			Anim->Montage_Stop(0.1f, CurrentComboMontage);
+		}
+	}
+	ComboReset();
+
+	Super::HandleDeath(Killer);
+}
+
+void AUT1Player::StartWeaponTrace()
+{
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->BeginAttackTrace();
+		}
+	}
+}
+
+void AUT1Player::TickWeaponTrace()
+{
+	const float Damage = GetCurrentAttackDamage();
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->TickAttackTrace(Damage);
+		}
+	}
+}
+
+void AUT1Player::StopWeaponTrace()
+{
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->EndAttackTrace();
+		}
+	}
+}
+
+float AUT1Player::GetCurrentAttackDamage() const
+{
+	if (CurrentWeaponData == nullptr)
+	{
+		return 0.0f;
+	}
+
+	const FComboStep* Step = GetCurrentComboStep();
+	const float Multiplier = (Step != nullptr) ? Step->DamageMultiplier : 1.0f;
+	return CurrentWeaponData->BaseDamage * Multiplier;
+}
+
+void AUT1Player::ClearEquippedWeapons()
+{
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->Destroy();
+		}
+	}
+	EquippedWeapons.Reset();
+}
+
 void AUT1Player::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -92,6 +273,11 @@ void AUT1Player::Tick(float DeltaTime)
 
 void AUT1Player::ComboAttack()
 {
+	if (IsDead())
+	{
+		return;
+	}
+
 	// 공격 중이 아니면 콤보 1단부터 시작한다.
 	if (bIsAttacking == false)
 	{
@@ -145,7 +331,14 @@ void AUT1Player::AdvanceCombo()
 
 void AUT1Player::PlayComboStep()
 {
-	const TArray<FComboStep>& Combo = TestWeaponData->ComboSequence;
+	// 애니메이션이 주도하는 상태는 언제든 샐 수 있다. NotifyEnd 가 어떤
+	// 이유로든 불리지 않았더라도 다음 단계로 넘어갈 때 반드시 꺼 둔다.
+	StopWeaponTrace();
+
+	if (CurrentWeaponData == nullptr)
+		return;
+
+	const TArray<FComboStep>& Combo = CurrentWeaponData->ComboSequence;
 	if (Combo.IsValidIndex(ComboIndex) == false)
 	{
 		ComboReset();
@@ -179,6 +372,7 @@ void AUT1Player::PlayComboStep()
 
 void AUT1Player::ComboReset()
 {
+	StopWeaponTrace();
 	ComboIndex = 0;
 	bIsAttacking = false;
 	bComboQueued = false;
@@ -195,7 +389,7 @@ void AUT1Player::OnMontageEnd(UAnimMontage* Montage, bool bInterrupted)
 	// 삼키지는 않고 살려 준다.
 	if (bComboQueued)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogUT1, Warning,
 			TEXT("[Combo] %d단 ComboWindowStart 가 몽타주 길이보다 깁니다. 선입력을 종료 시점에 처리합니다."),
 			ComboIndex);
 		AdvanceCombo();
@@ -207,17 +401,17 @@ void AUT1Player::OnMontageEnd(UAnimMontage* Montage, bool bInterrupted)
 
 bool AUT1Player::HasNextComboStep() const
 {
-	return TestWeaponData != nullptr && TestWeaponData->ComboSequence.IsValidIndex(ComboIndex + 1);
+	return CurrentWeaponData != nullptr && CurrentWeaponData->ComboSequence.IsValidIndex(ComboIndex + 1);
 }
 
 const FComboStep* AUT1Player::GetCurrentComboStep() const
 {
-	if (TestWeaponData == nullptr)
+	if (CurrentWeaponData == nullptr)
 	{
 		return nullptr;
 	}
 
-	const TArray<FComboStep>& Combo = TestWeaponData->ComboSequence;
+	const TArray<FComboStep>& Combo = CurrentWeaponData->ComboSequence;
 	return Combo.IsValidIndex(ComboIndex) ? &Combo[ComboIndex] : nullptr;
 }
 
@@ -260,7 +454,7 @@ void AUT1Player::RotateToCursor()
 
 void AUT1Player::Input_Move(const FInputActionValue& InputValue)
 {  
-	if (bIsAttacking) return;
+	if (bIsAttacking || IsDead()) return;
 
 	FVector2D MovementVector = InputValue.Get<FVector2D>();
 
