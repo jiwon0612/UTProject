@@ -19,6 +19,12 @@ class UT1_API UUT1_PortalWidget : public UUserWidget
 protected:
     virtual void NativeConstruct() override;
 
+    virtual FReply NativeOnKeyDown(const FGeometry& InGeometry,
+        const FKeyEvent& InKeyEvent) override;
+
+    void MoveSelectionRight();
+    void MoveSelectionLeft();
+
 public:
     UFUNCTION(BlueprintCallable)
     void RefreshRoomList();
@@ -54,20 +60,12 @@ private:
 
     AUT1_RoomManager* GetRoomManager() const;
 
-    FString GetRoomTypeName(int32 RoomID) const;
-
     bool CanMoveToRoom(int32 RoomID) const;
 
-    // 좌우 빈 공간 설정
-    void SetupScrollPadding();
+    void CenterRoom(int32 RoomID);
 
-    // 현재 방을 가운데로 이동
-    void CenterCurrentRoom();
+    UWidget* FindRoomButton(int32 RoomID) const;
 
 private:
-    UPROPERTY()
-    USpacer* LeftSpacer = nullptr;
-
-    UPROPERTY()
-    USpacer* RightSpacer = nullptr;
+    int32 SelectedRoomID = INDEX_NONE;
 };
