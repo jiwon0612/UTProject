@@ -273,6 +273,9 @@ public:
 
 	bool IsTargetInAttackRange(const AActor* Target) const;
 
+	/** 추적·공격해도 되는 대상인지임. 죽은 Entity는 제외해서 시체를 계속 때리지 않게 함 */
+	static bool IsValidCombatTarget(const AActor* Target);
+
 	/** 두 캡슐 표면 사이의 수평 간격임. 높이 차가 커서 닿을 수 없으면 최대값을 돌려줌 */
 	float GetTargetGap(const AActor* Target) const;
 

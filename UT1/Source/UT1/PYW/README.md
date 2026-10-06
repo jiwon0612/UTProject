@@ -51,7 +51,9 @@ Root (FindTarget service)
 ```
 
 The target is dropped when it leaves `LoseTargetRange` or stays out of sight
-for `LoseSightTime`; the last seen location then drives Search. Taking damage
+for `LoseSightTime`; the last seen location then drives Search. A dead target
+(`AEnemyCharacter::IsValidCombatTarget`) is dropped together with its last known
+location, so enemies return to patrol instead of attacking or searching a corpse. Taking damage
 from a non-enemy pawn sets it as the target immediately. Heavy hits accumulate
 poise damage; crossing `PoiseThreshold` interrupts the current attack (unless
 the pattern has `bSuperArmor`) and restarts the tree into Stagger.
@@ -113,10 +115,6 @@ Run order after building UT1Editor (both scripts are re-runnable):
 
 Spawning actors from Python crashes under `-nullrhi`; run the second script
 with `-RenderOffscreen`.
-
-`setup_enemy_archetypes.py`, `repair_enemy.py` and `create_enemy_test_content.py`
-are the older Mannequin-based scripts. They still use the pre-`BluePrint/` paths
-and would recreate Mannequin enemies, so do not run them on the current content.
 
 The legacy `AttackAnimations` array is no longer editable; values saved in older
 Blueprints are copied into the leading patterns on load and at BeginPlay.

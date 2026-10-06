@@ -296,8 +296,16 @@ int32 AEnemyCharacter::ChooseAttackPattern(const AActor* Target) const
 	return LastUsable;
 }
 
+bool AEnemyCharacter::IsValidCombatTarget(const AActor* Target)
+{
+	if (!IsValid(Target)) return false;
+	const AUT1Entity* Entity = Cast<AUT1Entity>(Target);
+	return !Entity || !Entity->IsDead();
+}
+
 bool AEnemyCharacter::CanStartAttack(const AActor* Target) const
 {
+	if (!IsValidCombatTarget(Target)) return false;
 	if (bIsDead || IsStaggered() || IsAttackInProgress() || GetWorld()->GetTimeSeconds() < NextAttackTime) return false;
 	const float Gap = GetTargetGap(Target);
 	for (int32 Index = 0; Index < AttackPatterns.Num(); ++Index)

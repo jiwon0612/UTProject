@@ -67,7 +67,7 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
 void AEnemyAIController::SetTargetActor(AActor* NewTarget)
 {
 	UBlackboardComponent* LocalBlackboard = GetBlackboardComponent();
-	if (!LocalBlackboard || !IsValid(NewTarget))
+	if (!LocalBlackboard || !AEnemyCharacter::IsValidCombatTarget(NewTarget))
 	{
 		return;
 	}

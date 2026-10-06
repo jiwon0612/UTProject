@@ -133,6 +133,16 @@ void UEnemyBTService_FindTarget::UpdateTarget(UBehaviorTreeComponent& OwnerComp)
 	}
 
 	AActor* CurrentTarget = GetTarget(OwnerComp);
+	if (IsValid(CurrentTarget) && !AEnemyCharacter::IsValidCombatTarget(CurrentTarget))
+	{
+		// 죽은 대상은 수색할 이유가 없어서 마지막 위치까지 지우고 순찰로 돌아감
+		Blackboard->ClearValue(AEnemyAIController::TargetActorKey);
+		Blackboard->ClearValue(AEnemyAIController::LastKnownLocationKey);
+		Controller->StopMovement();
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_TARGET_LOST Enemy=%s Target=%s Reason=Dead"),
+			*Enemy->GetName(), *GetNameSafe(CurrentTarget));
+		return;
+	}
 	if (IsValid(CurrentTarget))
 	{
 		if (Controller->LineOfSightTo(CurrentTarget))
@@ -160,7 +170,7 @@ void UEnemyBTService_FindTarget::UpdateTarget(UBehaviorTreeComponent& OwnerComp)
 
 	APlayerController* PlayerController = Enemy->GetWorld()->GetFirstPlayerController();
 	APawn* PlayerPawn = PlayerController ? PlayerController->GetPawn() : nullptr;
-	if (!IsValid(PlayerPawn))
+	if (!AEnemyCharacter::IsValidCombatTarget(PlayerPawn))
 	{
 		return;
 	}
@@ -185,7 +195,7 @@ UEnemyBTDecorator_HasTarget::UEnemyBTDecorator_HasTarget()
 
 bool UEnemyBTDecorator_HasTarget::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const
 {
-	return IsValid(GetTarget(OwnerComp));
+	return AEnemyCharacter::IsValidCombatTarget(GetTarget(OwnerComp));
 }
 
 UEnemyBTDecorator_CanAttack::UEnemyBTDecorator_CanAttack()
