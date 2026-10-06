@@ -37,6 +37,9 @@ PATTERN_EFFECTS = {
                            ["Emitter_LeafRing", "Projectile_Smoke", "Projectile_VFX", "Projectile_Particle001",
                             "Explosion_Smoke", "Explosion_Smoke001"]),
 }
+# 포격병의 포탄과 근거리 폭발도 같은 폭발만 씀. 배율은 범위 반경(자폭 300 = 1.3배)에 맞춤
+for _name, _scale in (("ArtilleryShell", 0.9), ("ArtilleryBarrage", 0.75), ("ArtilleryCloseBlast", 0.95)):
+    PATTERN_EFFECTS[_name] = (PATTERN_EFFECTS["BomberSelfDestruct"][0], _scale, PATTERN_EFFECTS["BomberSelfDestruct"][2])
 
 lib = unreal.EditorAssetLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -246,7 +249,7 @@ def configure_projectile(ranged):
     require(lib.save_loaded_asset(ranged, only_if_is_dirty=False), "Failed to save " + ranged.get_name())
 
 
-def place_test_enemies(melee, ranged, large, assassin, bomber):
+def place_test_enemies(melee, ranged, large, assassin, bomber, guardian, artillery):
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     require(levels.load_level(TEST_LEVEL), "Failed to load " + TEST_LEVEL)
     # 실제 전투 규칙으로 시험하도록 CJW 플레이어(BP_Player)를 쓰는 GameMode로 둠
@@ -275,7 +278,11 @@ def place_test_enemies(melee, ranged, large, assassin, bomber):
     place("Enemy_Large_Test", large, unreal.Vector(900.0, -600.0, 200.0))
     # 암살자는 옆에서 선회하며 파고들고, 자폭병은 멀리서 달려와 터지는 모습이 보이게 둠
     place("Enemy_Assassin_Test", assassin, unreal.Vector(-700.0, 500.0, 150.0))
-    place("Enemy_Bomber_Test", bomber, unreal.Vector(1200.0, 300.0, 150.0))
+    # 바닥이 ±900이라 그 안에 둠. 밖에 두면 시작하자마자 떨어짐
+    place("Enemy_Bomber_Test", bomber, unreal.Vector(800.0, 350.0, 150.0))
+    place("Enemy_Guardian_Test", guardian, unreal.Vector(-450.0, -350.0, 160.0))
+    # 포격병은 멀리서 쏘므로 반대편 끝에 둠
+    place("Enemy_Artillery_Test", artillery, unreal.Vector(-750.0, 650.0, 150.0))
     require(levels.save_current_level(), "Failed to save " + TEST_LEVEL)
     lib.save_directory("/Game/__ExternalActors__/PYW/Lvl_EnemyBTTest", only_if_is_dirty=True, recursive=True)
 
@@ -288,6 +295,8 @@ ranged = require(lib.load_asset(BP_ROOT + "/BP_RangedEnemy"), "Missing BP_Ranged
 large = ensure_blueprint("BP_LargeEnemy", "/Script/UT1.BruteEnemyCharacter")
 assassin = ensure_blueprint("BP_AssassinEnemy", "/Script/UT1.AssassinEnemyCharacter")
 bomber = ensure_blueprint("BP_BomberEnemy", "/Script/UT1.BomberEnemyCharacter")
+guardian = ensure_blueprint("BP_GuardianEnemy", "/Script/UT1.GuardianEnemyCharacter")
+artillery = ensure_blueprint("BP_ArtilleryEnemy", "/Script/UT1.ArtilleryEnemyCharacter")
 configure_enemy(melee, small, "/Script/UT1.MeleeEnemyCharacter")
 configure_enemy(ranged, small, "/Script/UT1.RangedEnemyCharacter")
 # 대형 메시(약 192cm)가 캡슐 안에 들어오도록 키움. Brute의 1.3배 캡슐 배율은 그대로 유지함
@@ -295,7 +304,10 @@ configure_enemy(large, large_profile, "/Script/UT1.BruteEnemyCharacter", capsule
 # 암살자(0.92배)와 자폭병(0.8배)은 C++ 캡슐 배율로 소형 몬스터를 줄여 씀
 configure_enemy(assassin, small, "/Script/UT1.AssassinEnemyCharacter")
 configure_enemy(bomber, small, "/Script/UT1.BomberEnemyCharacter")
+# 방패병(1.1배)과 포격병(0.95배)도 소형 몬스터를 캡슐 배율로 키우거나 줄여 씀
+configure_enemy(guardian, small, "/Script/UT1.GuardianEnemyCharacter")
+configure_enemy(artillery, small, "/Script/UT1.ArtilleryEnemyCharacter")
 configure_projectile(ranged)
-place_test_enemies(melee, ranged, large, assassin, bomber)
+place_test_enemies(melee, ranged, large, assassin, bomber, guardian, artillery)
 delete_unreferenced_redirectors(redirectors)
 unreal.log("PYW_MONSTER_ENEMIES_SUCCESS")

@@ -8,7 +8,7 @@ PYW/
 ├── AI/        Enemy Behavior Tree controller and custom BT nodes
 ├── Combat/    Combat helpers shared by enemies and projectiles (EnemyEffects)
 ├── Editor/    Editor-only helpers (UPYWEditorLibrary) for the PYW Python scripts
-├── Entities/  Shared enemy character plus melee/ranged/brute/assassin/bomber archetypes
+├── Entities/  Shared enemy character plus melee/ranged/brute/assassin/bomber/guardian/artillery archetypes
 └── Weapons/   Enemy projectile
 ```
 
@@ -36,6 +36,13 @@ real `BP_Player` combat rules instead of a separate test pawn.
   quick stab, three-hit flurry and a lunge stab.
 - `BomberEnemyCharacter`: 0.8x scale, 40 HP, sprints in and self-destructs after
   a 1.1s fuse. Any stagger cancels the fuse.
+- `GuardianEnemyCharacter`: shield guard, 1.1x scale, 150 HP, turns slowly. While not
+  attacking it takes only 20% of damage coming from its front 65 degrees, so the
+  player flanks it or punishes its swings; shield bash, double bash, heavy chop and a
+  mid-range shield charge.
+- `ArtilleryEnemyCharacter`: 0.95x scale, 70 HP, kites at long range (1300). Shells a
+  circle marked at the target's feet (lands 1.6s later), a scattered 4-shell barrage,
+  and a close-range blast that pushes the target away.
 - `EnemyAIController`: owns Blackboard and the runtime Unreal Behavior Tree.
 - `EnemyBTNodes`: target acquisition/loss and branch selection. Tasks delegate
   attack rules and speed selection to the character.
@@ -67,7 +74,8 @@ gap), `PatternCooldown` and `bEnragedOnly` allow it; the previous pattern is
 down-weighted. `Cooldown` is rest time after the attack finishes, jittered by
 `AttackCooldownVariance`. Patterns can also lunge (`LungeDelay`/`LungeSpeed`/
 `LungeLift`, speed is capped so the enemy lands at the target), hit an area
-(`AreaRadius`), hit several times (`HitCount`), fire several projectiles
+(`AreaRadius`; with `bAreaAtTarget` the circle is fixed at the target's feet when the
+attack starts, and `AreaScatter` spreads later hits around it), hit several times (`HitCount`), fire several projectiles
 (`ProjectilesPerHit`/`SpreadAngle`), knock back, or consume the attacker.
 
 Damage resolves after each pattern's `ImpactDelay`. Melee re-checks range and

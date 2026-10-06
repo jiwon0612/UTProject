@@ -110,6 +110,14 @@ struct FEnemyAttackPattern
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0"))
 	float AreaRadius = 0.0f;
 
+	// 범위 판정 중심을 자신 대신 공격 시작 순간의 대상 발밑으로 둠 (포격). 그 뒤 대상이 움직여도 중심은 따라가지 않음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (EditCondition = "AreaRadius > 0"))
+	bool bAreaAtTarget = false;
+
+	// bAreaAtTarget 연타 전용. 두 번째 판정부터 중심을 대상 발밑에서 이 반경 안으로 흩뿌림
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "0.0", EditCondition = "bAreaAtTarget"))
+	float AreaScatter = 0.0f;
+
 	// 원거리 전용. 타격 1회에 동시에 발사하는 투사체 수임. AreaRadius가 있으면 무시함
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Hit", meta = (ClampMin = "1"))
 	int32 ProjectilesPerHit = 1;
@@ -341,6 +349,9 @@ private:
 	UPROPERTY(Transient)
 	FEnemyAttackPattern ActivePattern;
 
+	// bAreaAtTarget 패턴의 타격별 범위 중심(바닥 높이)임. 공격 시작 때 정해서 미리 표시함
+	TArray<FVector> ActiveAreaCenters;
+
 	void PlayLocomotionAnimation();
 	void PlayActionAnimation(class UAnimSequence* Animation, float MaxDuration = 0.0f);
 	bool IsPatternUsable(int32 PatternIndex, float Gap) const;
@@ -354,9 +365,11 @@ private:
 	void Enrage();
 	class UAnimSequence* SelectDirectionalAnimation(const AActor* Source, class UAnimSequence* Front,
 		class UAnimSequence* Back, class UAnimSequence* Left, class UAnimSequence* Right) const;
-	void ShowDebugText(const FString& Text, const FColor& Color);
+	FVector GetAreaCenter(int32 HitIndex) const;
 
 protected:
+	void ShowDebugText(const FString& Text, const FColor& Color);
+
 	/** Entity가 공통 체력 차감을 끝낸 뒤, 적 전용 피격 반응을 처리함. */
 	virtual void HandleDamaged(float ActualDamage, AActor* DamageCauser) override;
 
@@ -367,7 +380,7 @@ protected:
 	virtual bool ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex);
 
 	/** 근접/범위 타격 공통 처리임. AreaRadius가 있으면 원형, 없으면 사거리와 정면 각도로 판정함 */
-	bool ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& Pattern, float HalfAngleDegrees);
+	bool ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& Pattern, float HalfAngleDegrees, int32 HitIndex = 0);
 
 public:
 

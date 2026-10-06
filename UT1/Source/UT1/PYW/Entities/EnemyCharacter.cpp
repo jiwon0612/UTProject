@@ -415,10 +415,29 @@ float AEnemyCharacter::GetAttackRecoveryTime() const
 	return FMath::Max(AnimationLength, LastHitTime) + Cooldown;
 }
 
-bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& Pattern, float HalfAngleDegrees)
+FVector AEnemyCharacter::GetAreaCenter(int32 HitIndex) const
+{
+	if (ActiveAreaCenters.IsValidIndex(HitIndex)) return ActiveAreaCenters[HitIndex];
+	return GetActorLocation() - FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+}
+
+bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& Pattern, float HalfAngleDegrees, int32 HitIndex)
 {
 	if (!IsValid(Target)) return false;
-	if (Pattern.AreaRadius > 0.0f)
+	FVector KnockbackOrigin = GetActorLocation();
+	if (Pattern.AreaRadius > 0.0f && Pattern.bAreaAtTarget)
+	{
+		// 표시된 원 안에 대상 캡슐이 걸치면 맞음. 높이는 대상 발밑과 원이 비슷할 때만 인정함
+		const ACharacter* TargetCharacter = Cast<ACharacter>(Target);
+		const UCapsuleComponent* TargetCapsule = TargetCharacter ? TargetCharacter->GetCapsuleComponent() : nullptr;
+		const float TargetRadius = TargetCapsule ? TargetCapsule->GetScaledCapsuleRadius() : 0.0f;
+		const float TargetHalfHeight = TargetCapsule ? TargetCapsule->GetScaledCapsuleHalfHeight() : 0.0f;
+		const FVector Center = GetAreaCenter(HitIndex);
+		const FVector Offset = Target->GetActorLocation() - FVector(0.0f, 0.0f, TargetHalfHeight) - Center;
+		if (Offset.Size2D() - TargetRadius > Pattern.AreaRadius || FMath::Abs(Offset.Z) > Pattern.AreaRadius) return false;
+		KnockbackOrigin = Center;
+	}
+	else if (Pattern.AreaRadius > 0.0f)
 	{
 		if (GetTargetGap(Target) > Pattern.AreaRadius) return false;
 	}
@@ -439,7 +458,7 @@ bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& 
 	{
 		if (ACharacter* TargetCharacter = Cast<ACharacter>(Target))
 		{
-			const FVector Knockback = (Target->GetActorLocation() - GetActorLocation()).GetSafeNormal2D() * Pattern.KnockbackStrength
+			const FVector Knockback = (Target->GetActorLocation() - KnockbackOrigin).GetSafeNormal2D() * Pattern.KnockbackStrength
 				+ FVector(0.0f, 0.0f, Pattern.KnockbackLift);
 			TargetCharacter->LaunchCharacter(Knockback, true, true);
 			UE_LOG(LogTemp, Display, TEXT("ENEMY_KNOCKBACK Enemy=%s Target=%s Pattern=%s"),
@@ -451,7 +470,7 @@ bool AEnemyCharacter::ApplyStrikeHit(AActor* Target, const FEnemyAttackPattern& 
 
 bool AEnemyCharacter::ExecuteCombatAttack(AActor* Target, const FEnemyAttackPattern& Pattern, int32 HitIndex)
 {
-	return ApplyStrikeHit(Target, Pattern, 180.0f);
+	return ApplyStrikeHit(Target, Pattern, 180.0f, HitIndex);
 }
 
 void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int32 HitIndex)
@@ -465,8 +484,9 @@ void AEnemyCharacter::ResolveAttackImpact(TWeakObjectPtr<AActor> WeakTarget, int
 	// 범위 공격은 빗나가도 폭발이 보여야 하고, 단일 타격은 맞았을 때만 대상 위치에 보여 줌
 	if (ActivePattern.ImpactEffect && (ActivePattern.AreaRadius > 0.0f || bHit))
 	{
-		const FVector EffectLocation = ActivePattern.AreaRadius > 0.0f || !IsValid(Target)
+		FVector EffectLocation = ActivePattern.AreaRadius > 0.0f || !IsValid(Target)
 			? GetActorLocation() : Target->GetActorLocation();
+		if (ActivePattern.AreaRadius > 0.0f && ActivePattern.bAreaAtTarget) EffectLocation = GetAreaCenter(HitIndex);
 		EnemyEffects::SpawnAtLocation(this, ActivePattern.ImpactEffect, EffectLocation, GetActorRotation(),
 			FVector(ActivePattern.ImpactEffectScale), ActivePattern.ImpactDisabledEmitters);
 	}
@@ -587,6 +607,20 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	}
 	BP_OnAttack(Target);
 
+	ActiveAreaCenters.Reset();
+	if (ActivePattern.AreaRadius > 0.0f && ActivePattern.bAreaAtTarget)
+	{
+		const ACharacter* TargetCharacter = Cast<ACharacter>(Target);
+		const float TargetHalfHeight = TargetCharacter ? TargetCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.0f;
+		const FVector TargetFeet = Target->GetActorLocation() - FVector(0.0f, 0.0f, TargetHalfHeight);
+		for (int32 HitIndex = 0; HitIndex < FMath::Max(ActivePattern.HitCount, 1); ++HitIndex)
+		{
+			// 첫 발은 대상 발밑에 떨어지고, 나머지는 주변에 흩어져 피할 방향을 고르게 함
+			const FVector2D Scatter = HitIndex == 0 ? FVector2D::ZeroVector : FMath::RandPointInCircle(ActivePattern.AreaScatter);
+			ActiveAreaCenters.Add(TargetFeet + FVector(Scatter.X, Scatter.Y, 0.0f));
+		}
+	}
+
 	const TWeakObjectPtr<AActor> WeakTarget(Target);
 	const bool bLunges = ActivePattern.LungeSpeed > 0.0f || ActivePattern.LungeLift > 0.0f;
 	if (bLunges)
@@ -612,7 +646,17 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	}
 
 	// 범위 공격은 떨어질 자리를 미리 보여 줘서 피할 수 있게 함
-	if (bShowAttackDebug && ActivePattern.AreaRadius > 0.0f)
+	if (bShowAttackDebug && !ActiveAreaCenters.IsEmpty())
+	{
+		// 포격은 떨어질 때까지 남은 시간이 다르므로 원마다 따로 유지함
+		for (int32 HitIndex = 0; HitIndex < ActiveAreaCenters.Num(); ++HitIndex)
+		{
+			const float LandTime = ActivePattern.ImpactDelay + HitIndex * FMath::Max(ActivePattern.HitInterval, 0.01f);
+			DrawDebugCircle(GetWorld(), ActiveAreaCenters[HitIndex] + FVector(0.0f, 0.0f, 5.0f), ActivePattern.AreaRadius, 32,
+				FColor::Red, false, FMath::Max(LandTime, 0.1f), 0, 4.0f, FVector(1.0f, 0.0f, 0.0f), FVector(0.0f, 1.0f, 0.0f), false);
+		}
+	}
+	else if (bShowAttackDebug && ActivePattern.AreaRadius > 0.0f)
 	{
 		const FVector Center = (bLunges ? Target->GetActorLocation() : GetActorLocation())
 			- FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - 5.0f);
