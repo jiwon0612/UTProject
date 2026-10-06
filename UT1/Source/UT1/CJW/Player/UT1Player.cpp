@@ -122,6 +122,7 @@ void AUT1Player::NotifyActorBeginOverlap(AActor* OtherActor)
 	if (OtherActor != nullptr && OtherActor->Implements<UUT1Interactable>())
 	{
 		NearbyInteractables.AddUnique(OtherActor);
+		RefreshFocusedInteractable();
 	}
 }
 
@@ -129,29 +130,55 @@ void AUT1Player::NotifyActorEndOverlap(AActor* OtherActor)
 {
 	Super::NotifyActorEndOverlap(OtherActor);
 
-	NearbyInteractables.Remove(OtherActor);
+	if (NearbyInteractables.Remove(OtherActor) > 0)
+	{
+		RefreshFocusedInteractable();
+	}
+}
+
+AActor* AUT1Player::GetFocusedInteractable() const
+{
+	if (IsDead())
+	{
+		return nullptr;
+	}
+
+	// 뒤에서부터(가장 최근에 들어온 대상부터) 살아 있는 것을 찾는다.
+	// 파괴된 항목은 겹침 끝 알림이 올 때 정리되므로 여기서는 건너뛰기만 한다.
+	for (int32 i = NearbyInteractables.Num() - 1; i >= 0; --i)
+	{
+		if (AActor* Target = NearbyInteractables[i].Get())
+		{
+			return Target;
+		}
+	}
+	return nullptr;
+}
+
+void AUT1Player::RefreshFocusedInteractable()
+{
+	AActor* NewTarget = GetFocusedInteractable();
+	if (LastFocusedInteractable.Get() == NewTarget)
+	{
+		return;
+	}
+
+	LastFocusedInteractable = NewTarget;
+	OnFocusedInteractableChanged.Broadcast(NewTarget);
 }
 
 void AUT1Player::Input_Interact()
 {
 	// 공격 중에 열리면 몽타주가 멈춘 채 UI 가 떠서 상태가 꼬인다.
-	if (IsDead() || bIsAttacking || DodgeComponent->IsDodging())
+	if (bIsAttacking || DodgeComponent->IsDodging())
 	{
 		return;
 	}
 
-	// 뒤에서부터(가장 최근에 들어온 대상부터) 살아 있는 것을 찾는다.
-	for (int32 i = NearbyInteractables.Num() - 1; i >= 0; --i)
+	// 사망 검사는 GetFocusedInteractable 안에 있다.
+	if (AActor* Target = GetFocusedInteractable())
 	{
-		AActor* Target = NearbyInteractables[i].Get();
-		if (Target == nullptr)
-		{
-			NearbyInteractables.RemoveAt(i);
-			continue;
-		}
-
 		IUT1Interactable::Execute_Interact(Target, this);
-		return;
 	}
 }
 
@@ -269,6 +296,9 @@ void AUT1Player::HandleDeath(AActor* Killer)
 	DodgeComponent->CancelDodge();
 
 	Super::HandleDeath(Killer);
+
+	// 죽으면 상호작용할 수 없으므로 안내를 내린다. bIsDead 는 베이스에서 켜지므로 그 뒤에 부른다.
+	RefreshFocusedInteractable();
 }
 
 void AUT1Player::StartWeaponTrace()
