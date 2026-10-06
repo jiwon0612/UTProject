@@ -13,6 +13,7 @@ class AUT1Weapon;
 class UUT1RunInventoryComponent;
 class UUT1MaterialData;
 class UUT1DodgeComponent;
+class UMaterialInterface;
 
 /**
  * 
@@ -134,6 +135,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<class UCameraComponent> Camera;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Occlusion Outline")
+	TObjectPtr<UMaterialInterface> OccludedCharacterOutlineMaterial;
 
 public:
 	void Input_Move(const FInputActionValue& InputValue);

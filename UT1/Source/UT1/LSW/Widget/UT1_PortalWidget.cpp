@@ -60,6 +60,16 @@ FReply UUT1_PortalWidget::NativeOnKeyDown(
         return FReply::Handled();
     }
 
+    if (Key == EKeys::E || Key == EKeys::Escape)
+    {
+        if (AUT1_RoomManager* RoomManager = GetRoomManager())
+        {
+            RoomManager->ClosePortalWidget();
+        }
+
+        return FReply::Handled();
+    }
+
     return Super::NativeOnKeyDown(
         InGeometry,
         InKeyEvent
@@ -209,7 +219,7 @@ void UUT1_PortalWidget::RefreshRoomList()
             RoomTexture = NormalRoomImage;
             break;
 
-        case ERoomType::Gimmick:
+        case ERoomType::Reward:
             RoomTexture = RewardRoomImage;
             break;
 
