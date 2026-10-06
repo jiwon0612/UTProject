@@ -13,6 +13,7 @@ class AUT1Weapon;
 class UUT1RunInventoryComponent;
 class UUT1MaterialData;
 class UUT1DodgeComponent;
+class UMaterialInterface;
 
 // 지금 E 를 누르면 실행될 대상이 바뀌었다. 대상이 없으면 nullptr.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FUT1FocusedInteractableChanged, AActor*, NewTarget);
@@ -122,6 +123,9 @@ private:
 	// 공격 범위 강화 = 무기 액터 크기. 장착 직후와 강화 직후에 다시 맞춘다.
 	void ApplyWeaponRangeScale();
 
+	// 강화 합계가 기준값 이상이면 무기 오라를 켠다. 장착 직후와 강화 직후에 다시 맞춘다.
+	void RefreshWeaponAura();
+
 protected:
 	// 이번 런의 재료, 설계도, 보유 무기와 강화 상태.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Crafting")
@@ -137,6 +141,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<class UCameraComponent> Camera;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Occlusion Outline")
+	TObjectPtr<UMaterialInterface> OccludedCharacterOutlineMaterial;
 
 public:
 	void Input_Move(const FInputActionValue& InputValue);

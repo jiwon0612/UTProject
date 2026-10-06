@@ -2,10 +2,9 @@
 #include "LSW/Rooms/UT1_RoomBase.h"
 #include "LSW/Rooms/UT1_Portal.h"
 #include "LSW/Widget/UT1_PortalWidget.h"
+#include "LSW/Widget/UT1_RoomTransitionWidget.h"
 #include "Engine/World.h"
-#include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
-#include "Components/InputComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/UnrealMathUtility.h"
 
@@ -17,27 +16,6 @@ AUT1_RoomManager::AUT1_RoomManager()
 void AUT1_RoomManager::BeginPlay()
 {
     Super::BeginPlay();
-
-    APlayerController* PlayerController =
-        UGameplayStatics::GetPlayerController(
-            GetWorld(),
-            0
-        );
-
-    if (PlayerController)
-    {
-        EnableInput(PlayerController);
-
-        if (InputComponent)
-        {
-            InputComponent->BindKey(
-                EKeys::E,
-                IE_Pressed,
-                this,
-                &AUT1_RoomManager::TryInteractPortal
-            );
-        }
-    }
 
     GenerateDungeon();
 }
@@ -106,9 +84,9 @@ void AUT1_RoomManager::GenerateDungeon()
                     break;
                 }
 
-                case ERoomType::Gimmick:
+                case ERoomType::Reward:
                 {
-                    NewRoom.SelectedRoomIndex = GetRandomRoomIndex(GimmickRoomClasses);
+                    NewRoom.SelectedRoomIndex = GetRandomRoomIndex(RewardRoomClasses);
 
                     if (NewRoom.SelectedRoomIndex == INDEX_NONE)
                     {
@@ -178,14 +156,14 @@ ERoomType AUT1_RoomManager::GetRandomRoomType(int32 RoomID,
     const float NormalWeight = FMath::Max(
             0.0f, NormalRoomWeight);
 
-    const float GimmickWeight = FMath::Max(
-            0.0f, GimmickRoomWeight);
+    const float RewardWeight = FMath::Max(
+            0.0f, RewardRoomWeight);
 
     const float MidBossWeight = bCanSpawnMidBoss
         ? FMath::Max(0.0f,MidBossRoomWeight) : 0.0f;
 
 
-    const float TotalWeight =NormalWeight +GimmickWeight +
+    const float TotalWeight = NormalWeight + RewardWeight +
         MidBossWeight;
 
     if (TotalWeight <= 0.0f)
@@ -203,11 +181,11 @@ ERoomType AUT1_RoomManager::GetRandomRoomType(int32 RoomID,
         return ERoomType::Normal;
     }
 
-    if (RandomValue < NormalWeight + GimmickWeight)
+    if (RandomValue < NormalWeight + RewardWeight)
     {
         bPreviousWasMidBoss = false;
 
-        return ERoomType::Gimmick;
+        return ERoomType::Reward;
     }
 
     if (bCanSpawnMidBoss)
@@ -236,6 +214,11 @@ int32 AUT1_RoomManager::GetRandomRoomIndex(
 void AUT1_RoomManager::MoveToRoom(
     int32 NextRoomID)
 {
+	if (bRoomTransitionInProgress)
+	{
+		return;
+	}
+
     if (!CanMoveToRoom(NextRoomID))
     {
         return;
@@ -246,8 +229,49 @@ void AUT1_RoomManager::MoveToRoom(
         return;
     }
 
-    ClosePortalWidget();
+    APlayerController* PlayerController = GetWorld()
+		? GetWorld()->GetFirstPlayerController()
+		: nullptr;
+	if (!PlayerController)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[RoomTransition] Cannot move rooms: no player controller."));
+		return;
+	}
+
+	if (!RoomTransitionWidgetClass)
+	{
+		RoomTransitionWidgetClass = UUT1_RoomTransitionWidget::StaticClass();
+	}
+
+	RoomTransitionWidget = CreateWidget<UUT1_RoomTransitionWidget>(PlayerController, RoomTransitionWidgetClass);
+	if (!RoomTransitionWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[RoomTransition] Failed to create transition widget class %s."),
+			*GetNameSafe(RoomTransitionWidgetClass.Get()));
+		return;
+	}
+
+	ClosePortalWidget();
     DestroyCurrentPortal();
+	PendingRoomID = NextRoomID;
+	bRoomTransitionInProgress = true;
+	RoomTransitionWidget->OnFadeOutFinished.AddDynamic(this, &AUT1_RoomManager::CompletePendingRoomMove);
+	RoomTransitionWidget->OnFadeInFinished.AddDynamic(this, &AUT1_RoomManager::FinishRoomTransition);
+	RoomTransitionWidget->AddToViewport(10000);
+	UE_LOG(LogTemp, Log, TEXT("[RoomTransition] Widget added to viewport for room %d -> %d."), CurrentRoomID, NextRoomID);
+	RoomTransitionWidget->PlayFadeOut();
+}
+
+void AUT1_RoomManager::CompletePendingRoomMove()
+{
+	if (!bRoomTransitionInProgress || PendingRoomID == INDEX_NONE || !RoomNodes.IsValidIndex(PendingRoomID))
+	{
+		if (RoomTransitionWidget)
+		{
+			RoomTransitionWidget->PlayFadeIn();
+		}
+		return;
+	}
 
     if (CurrentRoomActor)
     {
@@ -256,9 +280,22 @@ void AUT1_RoomManager::MoveToRoom(
         CurrentRoomActor = nullptr;
     }
 
-    CurrentRoomID = NextRoomID;
+    CurrentRoomID = PendingRoomID;
+    PendingRoomID = INDEX_NONE;
 
     SpawnCurrentRoom();
+	RoomTransitionWidget->PlayFadeIn();
+}
+
+void AUT1_RoomManager::FinishRoomTransition()
+{
+	if (RoomTransitionWidget)
+	{
+		RoomTransitionWidget->RemoveFromParent();
+		RoomTransitionWidget = nullptr;
+	}
+	PendingRoomID = INDEX_NONE;
+	bRoomTransitionInProgress = false;
 }
 
 void AUT1_RoomManager::MoveToNextRoom()
@@ -360,16 +397,12 @@ void AUT1_RoomManager::SpawnCurrentRoom()
         );
     }
 
-    if (RoomNode->RoomType == ERoomType::Base)
+    if (RoomNode->RoomType == ERoomType::Base ||
+        ((RoomNode->RoomType == ERoomType::MidBoss ||
+          RoomNode->RoomType == ERoomType::Reward) && RoomNode->bIsCleared))
     {
         SpawnCurrentPortal();
     }
-    else if (RoomNode->RoomType == ERoomType::MidBoss &&
-        RoomNode->bIsCleared)
-    {
-        SpawnCurrentPortal();
-    }
-    SpawnCurrentPortal();
 }
 
 TSubclassOf<AUT1_RoomBase> AUT1_RoomManager::GetRoomClass(
@@ -393,15 +426,15 @@ TSubclassOf<AUT1_RoomBase> AUT1_RoomManager::GetRoomClass(
             RoomNode.SelectedRoomIndex
         ];
     }
-    case ERoomType::Gimmick:
+    case ERoomType::Reward:
     {
-        if (!GimmickRoomClasses.IsValidIndex(
+        if (!RewardRoomClasses.IsValidIndex(
             RoomNode.SelectedRoomIndex))
         {
             return nullptr;
         }
 
-        return GimmickRoomClasses[
+        return RewardRoomClasses[
             RoomNode.SelectedRoomIndex
         ];
     }
@@ -515,7 +548,8 @@ void AUT1_RoomManager::MarkCurrentRoomCleared()
 
     CurrentRoom->bIsCleared = true;
 
-    if (CurrentRoom->RoomType == ERoomType::MidBoss)
+    if (CurrentRoom->RoomType == ERoomType::MidBoss ||
+        CurrentRoom->RoomType == ERoomType::Reward)
     {
         SpawnCurrentPortal();
     }

@@ -2,7 +2,10 @@
 
 
 #include "LSW/Rooms/UT1_NormalRoom.h"
+#include "LSW/Rooms/UT1_RoomManager.h"
+#include "CJW/Entities/UT1Entity.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 #include "PYW/Entities/EnemyCharacter.h"
 
 AUT1_NormalRoom::AUT1_NormalRoom()
@@ -47,6 +50,26 @@ void AUT1_NormalRoom::SpawnEnemies()
 
     EnemySpawnRoot->GetChildrenComponents(true, SpawnPoints);
 
+    for (int32 Index = SpawnPoints.Num() - 1; Index > 0; --Index)
+    {
+        const int32 SwapIndex = FMath::RandRange(0, Index);
+        SpawnPoints.Swap(Index, SwapIndex);
+    }
+
+    TArray<TSubclassOf<AEnemyCharacter>> ValidEnemyClasses;
+    for (const TSubclassOf<AEnemyCharacter>& EnemyClass : EnemyClasses)
+    {
+        if (EnemyClass)
+        {
+            ValidEnemyClasses.Add(EnemyClass);
+        }
+    }
+
+    if (ValidEnemyClasses.IsEmpty())
+    {
+        return;
+    }
+
     const int32 SpawnCount =
         FMath::Min(EnemyCount, SpawnPoints.Num());
 
@@ -57,14 +80,8 @@ void AUT1_NormalRoom::SpawnEnemies()
         if (!SpawnPoint)
             continue;
 
-        int32 ClassIndex =
-            FMath::RandRange(0, EnemyClasses.Num() - 1);
-
         TSubclassOf<AEnemyCharacter> EnemyClass =
-            EnemyClasses[ClassIndex];
-
-        if (!EnemyClass)
-            continue;
+            ValidEnemyClasses[FMath::RandRange(0, ValidEnemyClasses.Num() - 1)];
 
         FActorSpawnParameters SpawnParams;
         SpawnParams.SpawnCollisionHandlingOverride =
@@ -81,6 +98,27 @@ void AUT1_NormalRoom::SpawnEnemies()
         {
             Enemy->SetEnemyLevel(EnemyLevel);
             SpawnedEnemies.Add(Enemy);
+            Enemy->OnDied.AddDynamic(this, &AUT1_NormalRoom::HandleEnemyDied);
         }
+    }
+}
+
+void AUT1_NormalRoom::HandleEnemyDied(AUT1Entity* Entity)
+{
+    AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Entity);
+    if (!Enemy || SpawnedEnemies.Remove(Enemy) == 0)
+    {
+        return;
+    }
+
+    if (!SpawnedEnemies.IsEmpty())
+    {
+        return;
+    }
+
+    if (AUT1_RoomManager* RoomManager = Cast<AUT1_RoomManager>(
+        UGameplayStatics::GetActorOfClass(GetWorld(), AUT1_RoomManager::StaticClass())))
+    {
+        RoomManager->MarkCurrentRoomCleared();
     }
 }

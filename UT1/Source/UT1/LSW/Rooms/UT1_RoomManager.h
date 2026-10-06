@@ -8,6 +8,7 @@ class AUT1_RoomBase;
 class AUT1_Portal;
 class UUserWidget;
 class UUT1_PortalWidget;
+class UUT1_RoomTransitionWidget;
 
 struct FRoomNode;
 enum class ERoomType : uint8;
@@ -79,6 +80,12 @@ private:
 
     int32 GetRandomRoomIndex(const TArray<TSubclassOf<AUT1_RoomBase>>& RoomClasses) const;
 
+	UFUNCTION()
+	void CompletePendingRoomMove();
+
+	UFUNCTION()
+	void FinishRoomTransition();
+
     UFUNCTION()
     void TestMoveToBaseRoom();
 
@@ -89,9 +96,8 @@ public:
     UPROPERTY(EditAnywhere, Category = "Room")
     TArray<TSubclassOf<AUT1_RoomBase>> NormalRoomClasses;
 
-    // Gimmick = 보상/특수 방 역할
     UPROPERTY(EditAnywhere, Category = "Room")
-    TArray<TSubclassOf<AUT1_RoomBase>> GimmickRoomClasses;
+    TArray<TSubclassOf<AUT1_RoomBase>> RewardRoomClasses;
 
     UPROPERTY(EditAnywhere, Category = "Room")
     TArray<TSubclassOf<AUT1_RoomBase>> MidBossRoomClasses;
@@ -110,7 +116,7 @@ public:
     float NormalRoomWeight = 60.0f;
 
     UPROPERTY(EditAnywhere, Category = "Dungeon|Probability")
-    float GimmickRoomWeight = 25.0f;
+    float RewardRoomWeight = 25.0f;
 
     UPROPERTY(EditAnywhere, Category = "Dungeon|Probability")
     float MidBossRoomWeight = 15.0f;
@@ -148,4 +154,13 @@ public:
 
     UPROPERTY()
     UUT1_PortalWidget* PortalWidget = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Room Transition")
+	TSubclassOf<UUT1_RoomTransitionWidget> RoomTransitionWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUT1_RoomTransitionWidget> RoomTransitionWidget;
+
+	int32 PendingRoomID = INDEX_NONE;
+	bool bRoomTransitionInProgress = false;
 };

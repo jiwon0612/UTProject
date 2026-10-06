@@ -4,6 +4,8 @@
 #include "CJW/Player/UT1Player.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -36,6 +38,13 @@ AUT1Player::AUT1Player()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm);
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OutlineMaterial(
+		TEXT("/Game/LSW/Materials/M_UT1_OccludedCharacterOutline.M_UT1_OccludedCharacterOutline"));
+	if (OutlineMaterial.Succeeded())
+	{
+		OccludedCharacterOutlineMaterial = OutlineMaterial.Object;
+		Camera->PostProcessSettings.AddBlendable(OccludedCharacterOutlineMaterial, 1.0f);
+	}
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 500.f, 0.f);
@@ -94,6 +103,17 @@ void AUT1Player::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 void AUT1Player::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Apply this after Blueprint component defaults are loaded so they cannot
+	// silently replace the constructor's post-process blendable.
+	if (Camera && OccludedCharacterOutlineMaterial)
+	{
+		Camera->PostProcessSettings.AddBlendable(OccludedCharacterOutlineMaterial, 1.0f);
+	}
+	else
+	{
+		UE_LOG(LogUT1, Warning, TEXT("[Outline] Camera or outline material is missing on %s."), *GetName());
+	}
 
 	// 장착 변경은 인벤토리가 결정하고, 무기 액터 교체는 플레이어가 한다.
 	// 시작 무기 장착보다 먼저 바인딩해야 첫 장착 알림을 놓치지 않는다.
@@ -252,6 +272,20 @@ void AUT1Player::EquipWeaponData(UUT1WeaponData* NewWeaponData)
 	}
 
 	ApplyWeaponRangeScale();
+	RefreshWeaponAura();
+}
+
+void AUT1Player::RefreshWeaponAura()
+{
+	// 쌍검처럼 손에 든 무기가 여럿이면 전부 같은 상태로 맞춘다.
+	const bool bShowAura = RunInventory->ShouldShowAura(CurrentWeaponData);
+	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
+	{
+		if (IsValid(Weapon))
+		{
+			Weapon->SetAuraActive(bShowAura);
+		}
+	}
 }
 
 void AUT1Player::ApplyWeaponRangeScale()
@@ -270,9 +304,10 @@ void AUT1Player::ApplyWeaponRangeScale()
 
 void AUT1Player::HandleInventoryChanged()
 {
-	// 장착 중인 무기를 작업대에서 강화하면 무기 크기가 바로 바뀌어야 한다.
+	// 장착 중인 무기를 작업대에서 강화하면 무기 크기와 오라가 바로 바뀌어야 한다.
 	// 데미지/공속/치명타는 공격할 때마다 새로 읽으므로 여기서 할 일이 없다.
 	ApplyWeaponRangeScale();
+	RefreshWeaponAura();
 }
 
 void AUT1Player::EndPlay(const EEndPlayReason::Type EndPlayReason)

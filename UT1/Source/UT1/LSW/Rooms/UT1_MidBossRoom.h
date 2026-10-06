@@ -7,6 +7,7 @@
 #include "UT1_MidBossRoom.generated.h"
 
 class AEnemyCharacter;
+class AUT1Entity;
 
 UCLASS()
 class UT1_API AUT1_MidBossRoom : public AUT1_RoomBase
@@ -26,6 +27,9 @@ public:
 private:
     void SpawnMidBoss();
     void GiveMidBossReward();
+
+    UFUNCTION()
+    void HandleMidBossDied(AUT1Entity* Entity);
 
 public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MidBoss")
