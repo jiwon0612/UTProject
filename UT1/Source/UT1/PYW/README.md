@@ -68,21 +68,55 @@ the wind-up avoids the hit. With `bShowAttackDebug`, area attacks draw their
 landing circle during the wind-up and state changes ("!", stagger, enrage,
 pattern name) are drawn above the enemy.
 
-Locomotion uses `Content/PYW/BS_EnemyLocomotion`. The first three melee/ranged
-patterns use `AN_MeleeAttack_01..03` and `AN_RangedQuickCast`/`Cast`/`PowerCast`;
-the other patterns and archetypes use the Mannequin animations set in C++.
-Hit reactions use the Mannequin rifle HitReact clips. Death picks front/back/
-left/right by damage direction, with `AN_EnemyDeath` as the front clip.
+# Monster visuals
+
+C++ defaults still point at Mannequin animations; the Blueprints override them
+with Dungeon Pack monster meshes (`Content/CJW/.../Monsters`, read-only here).
+
+```text
+Content/PYW/
+├── BluePrint/   BP_MeleeEnemy, BP_RangedEnemy (SK_Monster_Small),
+│                BP_LargeEnemy (SK_Monster_Large, parent BruteEnemyCharacter),
+│                BP_EnemyProjectile (NS_VFX_Evil trail, NS_VFX_Explosion impact)
+├── Animation/   IK_Mannequin, IK_MonsterSmall/Large, RTG_MannyToMonsterSmall/Large
+│   ├── Small/   SM_* retargeted clips + BS_MonsterSmall_Locomotion
+│   └── Large/   LM_* retargeted clips + BS_MonsterLarge_Locomotion
+└── ProjectileVFX/  imported Niagara pack
+```
+
+- Small and Large monsters share one Rigify-style hierarchy (`spine` = pelvis,
+  `spine_003` = chest), so one chain table drives both IK Rigs. Chain names match
+  `IK_Mannequin` so chains map with `AutoMapChainType.EXACT`.
+- The monster `Root` bone carries a x100 scale from Blender. The IK Retargeter
+  ignores bone scale, so the batch output gets `Root` scale 1 and a cm-unit pelvis
+  translation, which shrinks the skinned mesh to 1/100. `restore_root_scale`
+  writes the reference scale back and divides the pelvis translation by it.
+- Locomotion is a simple 4-direction Walk(300)/Jog(600) BlendSpace on the axes
+  `AEnemyCharacter::Tick` feeds (Direction -180..180, Speed 0..600).
+- Attack patterns keep their C++ timing; the setup maps each pattern's source
+  Mannequin clip to the retargeted `SM_`/`LM_` clip with the same name.
+- Hit reactions are retargeted rifle HitReact clips, so the arms briefly take a
+  rifle-holding shape. Replace them when unarmed hit clips are available.
+
+Run order after building UT1Editor (both scripts are re-runnable):
+
+1. `Content/PYW/setup_monster_animations.py` - IK Rigs, Retargeters, retargeted
+   clips and locomotion BlendSpaces.
+2. `Content/PYW/setup_monster_enemies.py` - BP meshes/animations, projectile VFX,
+   test enemies in `Lvl_EnemyBTTest`, and removal of leftover redirectors.
+
+Spawning actors from Python crashes under `-nullrhi`; run the second script
+with `-RenderOffscreen`.
+
+`setup_enemy_archetypes.py`, `repair_enemy.py` and `create_enemy_test_content.py`
+are the older Mannequin-based scripts. They still use the pre-`BluePrint/` paths
+and would recreate Mannequin enemies, so do not run them on the current content.
+
 The legacy `AttackAnimations` array is no longer editable; values saved in older
 Blueprints are copied into the leading patterns on load and at BeginPlay.
 `BP_OnAttack` remains an extension point for weapon trails, sounds and VFX.
 
-Manny mesh rotation is Pitch=0, Yaw=-90, Roll=0. Unreal Python Rotator positional
-arguments do not follow C++ FRotator order; always use named arguments in scripts.
-Attack facing changes only actor Yaw, including when a target is above/below it.
-
-After building UT1Editor, run Content/PYW/setup_enemy_archetypes.py to create
-BP_BruteEnemy/BP_AssassinEnemy/BP_BomberEnemy and place them in the test level.
-Content/PYW/repair_enemy.py updates the existing BP and loaded test enemies
-without recreating the map. The full create_enemy_test_content.py script
-replaces the test map and should only be used when intentionally rebuilding it.
+Mesh rotation is Pitch=0, Yaw=-90, Roll=0 for both Manny and the monsters. Unreal
+Python Rotator positional arguments do not follow C++ FRotator order; always use
+named arguments in scripts. Attack facing changes only actor Yaw, including when
+a target is above/below it.
