@@ -4,6 +4,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "PYW/Entities/EnemyCharacter.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -44,22 +46,43 @@ void AEnemyProjectile::BeginPlay()
 	Movement->InitialSpeed = Speed;
 	Movement->MaxSpeed = Speed;
 	Movement->Velocity = GetActorForwardVector() * Speed;
-	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileLaunched Projectile=%s Location=%s Velocity=%s"),
-		*GetName(), *GetActorLocation().ToCompactString(), *Movement->Velocity.ToCompactString());
+	if (TrailEffect)
+	{
+		// 이펙트 수명을 액터에 묶어 두어 투사체가 사라질 때 함께 정리되게 함
+		UNiagaraFunctionLibrary::SpawnSystemAttached(TrailEffect, Collision, NAME_None, FVector::ZeroVector,
+			FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, true);
+		Visual->SetVisibility(false);
+	}
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileLaunched Projectile=%s Location=%s Velocity=%s Trail=%s"),
+		*GetName(), *GetActorLocation().ToCompactString(), *Movement->Velocity.ToCompactString(), *GetNameSafe(TrailEffect));
 }
 
 void AEnemyProjectile::OnProjectileHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
 {
-	ApplyProjectileDamage(OtherActor);
-	Destroy();
+	Explode(OtherActor, Hit.ImpactPoint);
 }
 
 void AEnemyProjectile::OnProjectileOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (!IsValid(OtherActor) || OtherActor == GetOwner() || OtherActor->IsA<AEnemyCharacter>()) return;
+	Explode(OtherActor, GetActorLocation());
+}
+
+void AEnemyProjectile::Explode(AActor* OtherActor, const FVector& ImpactLocation)
+{
+	if (bExploded) return;
+	bExploded = true;
 	ApplyProjectileDamage(OtherActor);
+	if (ImpactEffect)
+	{
+		// 액터가 바로 제거되므로 붙이지 않고 월드 위치에 독립적으로 생성함
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ImpactEffect, ImpactLocation,
+			GetActorRotation(), ImpactEffectScale);
+	}
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileExploded Projectile=%s Location=%s Impact=%s"),
+		*GetName(), *ImpactLocation.ToCompactString(), *GetNameSafe(ImpactEffect));
 	Destroy();
 }
 
