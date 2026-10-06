@@ -13,7 +13,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "CJW/Crafting/UT1LootDropComponent.h"
 #include "PYW/AI/EnemyAIController.h"
-#include "PYW/Gameplay/EnemyEffects.h"
+#include "PYW/Combat/EnemyEffects.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {

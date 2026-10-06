@@ -2,7 +2,7 @@
 
 #include "Animation/AnimSequence.h"
 #include "Engine/World.h"
-#include "PYW/Gameplay/EnemyProjectile.h"
+#include "PYW/Weapons/EnemyProjectile.h"
 #include "UObject/ConstructorHelpers.h"
 
 ARangedEnemyCharacter::ARangedEnemyCharacter()

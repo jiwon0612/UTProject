@@ -1,4 +1,4 @@
-#include "PYW/Gameplay/EnemyEffects.h"
+#include "PYW/Combat/EnemyEffects.h"
 
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"

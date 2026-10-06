@@ -1,4 +1,4 @@
-#include "PYW/Gameplay/EnemyProjectile.h"
+#include "PYW/Weapons/EnemyProjectile.h"
 
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -9,7 +9,7 @@
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 #include "PYW/Entities/EnemyCharacter.h"
-#include "PYW/Gameplay/EnemyEffects.h"
+#include "PYW/Combat/EnemyEffects.h"
 #include "UObject/ConstructorHelpers.h"
 
 AEnemyProjectile::AEnemyProjectile()

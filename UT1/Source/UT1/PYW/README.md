@@ -1,15 +1,18 @@
 # PYW structure
 
-PYW follows the project-wide feature grouping used by `CJW` and
-`Variant_TwinStick`:
+PYW uses the same feature folders as `CJW` (`Entities/`, `Weapons/`, `Combat/`);
+folders CJW has no counterpart for keep their own name:
 
 ```text
 PYW/
 ├── AI/        Enemy Behavior Tree controller and custom BT nodes
+├── Combat/    Combat helpers shared by enemies and projectiles (EnemyEffects)
 ├── Editor/    Editor-only helpers (UPYWEditorLibrary) for the PYW Python scripts
 ├── Entities/  Shared enemy character plus melee/ranged/brute/assassin/bomber archetypes
-└── Gameplay/  Enemy projectile behavior
+└── Weapons/   Enemy projectile
 ```
+
+`Entities/EnemyCharacter.h` is included by LSW rooms, so its path is kept stable.
 
 `Lvl_EnemyBTTest` uses CJW's `BP_DavGameMods`, so enemies are tested against the
 real `BP_Player` combat rules instead of a separate test pawn.
