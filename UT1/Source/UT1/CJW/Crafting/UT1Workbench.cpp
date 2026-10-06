@@ -6,7 +6,6 @@
 #include "CJW/Player/UT1Player.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
-#include "Components/TextRenderComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "UT1.h"
 
@@ -24,15 +23,8 @@ AUT1Workbench::AUT1Workbench()
 	// 양쪽 액터 모두 NotifyActorBeginOverlap 을 받는다.
 	InteractRange->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
 
-	PromptText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("PromptText"));
-	PromptText->SetupAttachment(Mesh);
-	PromptText->SetText(NSLOCTEXT("UT1Workbench", "Prompt", "E: 작업대"));
-	PromptText->SetHorizontalAlignment(EHTA_Center);
-	PromptText->SetRelativeLocation(FVector(0.0f, 0.0f, 150.0f));
-	// 텍스트 앞면(+X)이 카메라를 보게 한다. 플레이어 SpringArm 이 (-50, 45, 0) 이라
-	// 카메라는 Yaw 225, 위로 50도 방향에 있다. 카메라 각도를 바꾸면 여기도 맞춘다.
-	PromptText->SetRelativeRotation(FRotator(50.0f, 225.0f, 0.0f));
-	PromptText->SetHiddenInGame(true);
+	// 안내는 플레이어 HUD 가 그린다. 작업대는 문구만 알려 준다.
+	InteractionPrompt = NSLOCTEXT("UT1Workbench", "Prompt", "작업대 사용");
 
 	// 위젯은 C++ 기본 레이아웃으로 바로 동작한다. WBP 로 꾸미면 BP 에서 바꾼다.
 	WidgetClass = UUT1WorkbenchWidget::StaticClass();
@@ -66,22 +58,7 @@ void AUT1Workbench::Interact_Implementation(AUT1Player* Interactor)
 	}
 }
 
-void AUT1Workbench::NotifyActorBeginOverlap(AActor* OtherActor)
+FText AUT1Workbench::GetInteractionPrompt_Implementation() const
 {
-	Super::NotifyActorBeginOverlap(OtherActor);
-
-	if (Cast<AUT1Player>(OtherActor) != nullptr)
-	{
-		PromptText->SetHiddenInGame(false);
-	}
-}
-
-void AUT1Workbench::NotifyActorEndOverlap(AActor* OtherActor)
-{
-	Super::NotifyActorEndOverlap(OtherActor);
-
-	if (Cast<AUT1Player>(OtherActor) != nullptr)
-	{
-		PromptText->SetHiddenInGame(true);
-	}
+	return InteractionPrompt;
 }

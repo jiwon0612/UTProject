@@ -14,6 +14,9 @@ class UUT1RunInventoryComponent;
 class UUT1MaterialData;
 class UUT1DodgeComponent;
 
+// 지금 E 를 누르면 실행될 대상이 바뀌었다. 대상이 없으면 nullptr.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FUT1FocusedInteractableChanged, AActor*, NewTarget);
+
 /**
  * 
  */
@@ -140,15 +143,48 @@ public:
 	void Input_Interact();
 	void Input_Dodge();
 
+	// 공격 버튼: 누른 순간(Started)과 누르고 있는 동안(Triggered, 매 프레임).
+	void Input_AttackPressed();
+	void Input_AttackHeld();
+
+protected:
+	// 꾹 누르고 있으면 콤보 마지막 타 뒤에 1타부터 다시 시작한다.
+	// 끄면 꾹 누르기는 한 콤보를 끝까지 잇는 데까지만 동작한다.
+	UPROPERTY(EditAnywhere, Category = "Combat|Hold Attack")
+	bool bRepeatComboWhileHeld = true;
+
+	// 이 시간 이상 누르고 있어야 "꾹 누르기"로 본다. Triggered 는 누른 첫 프레임에도
+	// 발생하므로, 기준이 없으면 한 번 클릭만 해도 다음 타가 예약돼 버린다.
+	UPROPERTY(EditAnywhere, Category = "Combat|Hold Attack", meta = (ClampMin = "0.0"))
+	float HoldAttackThreshold = 0.2f;
+
+private:
+	float AttackPressedTime = 0.0f;
+
 private:
 	// 2D 입력을 카메라 기준 월드 방향으로 바꾼다. 이동과 회피가 같은 기준을 써야
 	// 누른 방향과 구르는 방향이 어긋나지 않는다.
 	FVector GetCameraRelativeDirection(const FVector2D& Input) const;
 
+public:
+	// E 를 누르면 실행될 대상. 안내 UI 와 실제 입력이 같은 함수로 대상을 고르므로
+	// "안내는 A 인데 B 가 열리는" 어긋남이 생기지 않는다.
+	AActor* GetFocusedInteractable() const;
+
+	UPROPERTY(BlueprintAssignable, Category = "Interaction")
+	FUT1FocusedInteractableChanged OnFocusedInteractableChanged;
+
 private:
 	// 범위 안의 상호작용 대상들. 대상이 사라져도 댕글링 포인터가 되지 않게 약한 참조로 둔다.
 	// 여러 개가 겹치면 가장 나중에 들어온 대상을 쓴다.
 	TArray<TWeakObjectPtr<AActor>> NearbyInteractables;
+
+	// 대상이 바뀌었을 때만 OnFocusedInteractableChanged 를 알린다.
+	// 겹침 시작/끝, 사망처럼 대상이 바뀔 수 있는 곳에서 부른다.
+	void RefreshFocusedInteractable();
+
+	// 마지막으로 알린 대상. 같은 대상을 반복해서 알리지 않으려고 기억한다.
+	TWeakObjectPtr<AActor> LastFocusedInteractable;
 
 protected:
 	UPROPERTY(EditAnywhere, Category = Input)

@@ -78,6 +78,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Trace")
 	bool bDrawDebugTrace = false;
 
+	// 맞은 지점에 터지는 이펙트. 무기마다 다르게 줄 수 있게 무기 BP 에서 지정한다.
+	// 비어 있으면 아무것도 나오지 않는다.
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Feedback")
+	TObjectPtr<class UNiagaraSystem> HitEffect;
+
+	// 치명타 전용. 비어 있으면 HitEffect 를 쓴다.
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Feedback")
+	TObjectPtr<class UNiagaraSystem> CritHitEffect;
+
 private:
 	// 이번 스윙에서 이미 때린 대상. 한 번 휘두를 때 한 번만 맞게 한다.
 	UPROPERTY()
@@ -90,4 +99,6 @@ private:
 	bool bTracing = false;
 
 	void BuildSamplePoints(TArray<FVector>& Out) const;
+
+	void SpawnHitEffect(const FHitResult& Hit, const AActor* HitActor, bool bCritical) const;
 };
