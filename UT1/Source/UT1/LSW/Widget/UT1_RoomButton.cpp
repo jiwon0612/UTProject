@@ -1,8 +1,7 @@
 #include "LSW/Widget/UT1_RoomButton.h"
 
 #include "Components/Button.h"
-#include "Components/TextBlock.h"
-
+#include "Components/Image.h"
 
 void UUT1_RoomButton::NativeConstruct()
 {
@@ -17,40 +16,43 @@ void UUT1_RoomButton::NativeConstruct()
     }
 }
 
-
-void UUT1_RoomButton::SetupRoomButton(int32 InRoomID, const FString& InRoomName,
-    bool bCanMove, bool bIsCurrent)
+void UUT1_RoomButton::SetupRoomButton(int32 InRoomID, UTexture2D* InRoomTexture,
+    bool bCanMove, bool bIsCurrent
+)
 {
     RoomID = InRoomID;
 
-    if (RoomText)
+    if (RoomImage && InRoomTexture)
     {
-        FString DisplayText;
-
-        DisplayText =
-            FString::Printf(
-                TEXT("%d : %s"),
-                RoomID,
-                *InRoomName
-            );
-
-        RoomText->SetText(
-            FText::FromString(DisplayText)
-        );
+        RoomImage->SetBrushFromTexture(InRoomTexture);
     }
 
     if (RoomButton)
     {
-        RoomButton->SetIsEnabled(
-            bCanMove
-        );
+        RoomButton->SetIsEnabled(bCanMove);
+
+        if (bIsCurrent)
+        {
+            RoomImage->SetColorAndOpacity(
+                FLinearColor::White
+            );
+        }
+        else if (bCanMove)
+        {
+            RoomImage->SetColorAndOpacity(
+                FLinearColor(0.8f, 0.8f, 0.8f, 1.0f)
+            );
+        }
+        else
+        {
+            RoomImage->SetColorAndOpacity(
+                FLinearColor(0.4f, 0.4f, 0.4f, 1.0f)
+            );
+        }
     }
 }
 
-
 void UUT1_RoomButton::OnClicked()
 {
-    OnRoomButtonClicked.Broadcast(
-        RoomID
-    );
+    OnRoomButtonClicked.Broadcast(RoomID);
 }

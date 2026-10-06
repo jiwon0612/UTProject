@@ -5,7 +5,8 @@
 #include "UT1_RoomButton.generated.h"
 
 class UButton;
-class UTextBlock;
+class UImage;
+class UTexture2D;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
     FOnRoomButtonClicked,
@@ -28,7 +29,7 @@ public:
     UButton* RoomButton;
 
     UPROPERTY(meta = (BindWidget))
-    UTextBlock* RoomText;
+    UImage* RoomImage;
 
 
     UPROPERTY(BlueprintAssignable)
@@ -37,7 +38,7 @@ public:
 
     void SetupRoomButton(
         int32 InRoomID,
-        const FString& InRoomName,
+        UTexture2D* InRoomTexture,
         bool bCanMove,
         bool bIsCurrent
     );

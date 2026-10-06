@@ -9,6 +9,7 @@ class UHorizontalBox;
 class UScrollBox;
 class USpacer;
 class UUT1_RoomButton;
+class UTexture2D;
 
 UCLASS()
 class UT1_API UUT1_PortalWidget : public UUserWidget
@@ -17,6 +18,10 @@ class UT1_API UUT1_PortalWidget : public UUserWidget
 
 protected:
     virtual void NativeConstruct() override;
+
+public:
+    UFUNCTION(BlueprintCallable)
+    void RefreshRoomList();
 
 public:
     UPROPERTY(meta = (BindWidget))
@@ -28,8 +33,20 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room")
     TSubclassOf<UUT1_RoomButton> RoomButtonClass;
 
-    UFUNCTION(BlueprintCallable)
-    void RefreshRoomList();
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
+    UTexture2D* BaseRoomImage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
+    UTexture2D* NormalRoomImage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
+    UTexture2D* RewardRoomImage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
+    UTexture2D* MidBossRoomImage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Room Image")
+    UTexture2D* BossRoomImage;
 
 private:
     UFUNCTION()

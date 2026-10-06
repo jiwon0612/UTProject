@@ -78,10 +78,40 @@ void UUT1_PortalWidget::RefreshRoomList()
 
         const bool bIsCurrent = RoomNode.RoomID == CurrentRoomID;
         const bool bCanMove = CanMoveToRoom(RoomNode.RoomID);
-        const FString RoomName = GetRoomTypeName(RoomNode.RoomID);
+        UTexture2D* RoomTexture = nullptr;
 
-        RoomButton->SetupRoomButton(RoomNode.RoomID, RoomName,
-            bCanMove, bIsCurrent);
+        switch (RoomNode.RoomType)
+        {
+        case ERoomType::Base:
+            RoomTexture = BaseRoomImage;
+            break;
+
+        case ERoomType::Normal:
+            RoomTexture = NormalRoomImage;
+            break;
+
+        case ERoomType::Gimmick:
+            RoomTexture = RewardRoomImage;
+            break;
+
+        case ERoomType::MidBoss:
+            RoomTexture = MidBossRoomImage;
+            break;
+
+        case ERoomType::Boss:
+            RoomTexture = BossRoomImage;
+            break;
+
+        default:
+            break;
+        }
+
+        RoomButton->SetupRoomButton(
+            RoomNode.RoomID,
+            RoomTexture,
+            bCanMove,
+            bIsCurrent
+        );
 
         RoomButton->OnRoomButtonClicked.AddDynamic(this, &UUT1_PortalWidget::OnRoomButtonClicked);
 
