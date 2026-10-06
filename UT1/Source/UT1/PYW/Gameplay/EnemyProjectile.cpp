@@ -36,6 +36,13 @@ AEnemyProjectile::AEnemyProjectile()
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere"));
 	if (SphereMesh.Succeeded()) Visual->SetStaticMesh(SphereMesh.Object);
 
+	Tail = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Tail"));
+	Tail->SetupAttachment(Collision);
+	Tail->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Tail->SetCastShadow(false);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(TEXT("/Engine/BasicShapes/Cone"));
+	if (ConeMesh.Succeeded()) Tail->SetStaticMesh(ConeMesh.Object);
+
 	Movement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("Movement"));
 	Movement->UpdatedComponent = Collision;
 	Movement->bRotationFollowsVelocity = true;
@@ -52,6 +59,8 @@ void AEnemyProjectile::BeginPlay()
 	Movement->MaxSpeed = Speed;
 	Movement->Velocity = GetActorForwardVector() * Speed;
 	if (CoreMaterial) Visual->SetMaterial(0, CoreMaterial);
+	if (TailMaterial) Tail->SetMaterial(0, TailMaterial);
+	LayoutTail();
 	if (TrailEffect)
 	{
 		// 이펙트 수명을 액터에 묶어 두어 투사체가 사라질 때 함께 정리되게 함
@@ -62,6 +71,25 @@ void AEnemyProjectile::BeginPlay()
 	}
 	UE_LOG(LogTemp, Display, TEXT("ENEMY_RANGED ProjectileLaunched Projectile=%s Location=%s Velocity=%s Trail=%s"),
 		*GetName(), *GetActorLocation().ToCompactString(), *Movement->Velocity.ToCompactString(), *GetNameSafe(TrailEffect));
+}
+
+void AEnemyProjectile::LayoutTail()
+{
+	const UStaticMesh* Mesh = Tail->GetStaticMesh();
+	if (TailLength <= 0.0f || !Mesh)
+	{
+		Tail->SetVisibility(false);
+		return;
+	}
+	// 엔진 원뿔은 +Z가 꼭짓점임. Pitch 90으로 +Z를 -X(진행 반대)로 돌리고, 밑면이 코어 중심에 오게 밀어 둠
+	const FBox Bounds = Mesh->GetBoundingBox();
+	const float Height = FMath::Max(Bounds.Max.Z - Bounds.Min.Z, KINDA_SMALL_NUMBER);
+	const float Width = FMath::Max(Bounds.Max.X - Bounds.Min.X, KINDA_SMALL_NUMBER);
+	const float LengthScale = TailLength / Height;
+	const float WidthScale = Collision->GetUnscaledSphereRadius() * 2.0f / Width;
+	Tail->SetRelativeRotation(FRotator(90.0f, 0.0f, 0.0f));
+	Tail->SetRelativeScale3D(FVector(WidthScale, WidthScale, LengthScale));
+	Tail->SetRelativeLocation(FVector(Bounds.Min.Z * LengthScale, 0.0f, 0.0f));
 }
 
 void AEnemyProjectile::OnProjectileHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,

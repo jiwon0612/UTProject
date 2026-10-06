@@ -153,18 +153,37 @@ def ensure_core_material():
     return material
 
 
+def ensure_tail_material():
+    """원뿔 꼬리용 가산 머티리얼임. 코어보다 어둡게 해서 판정 위치(코어)가 먼저 눈에 들어오게 함."""
+    folder, name = ROOT + "/Materials", "M_EnemyProjectileTail"
+    path = folder + "/" + name
+    material = lib.load_asset(path) if lib.does_asset_exist(path) else require(
+        tools.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew()), "Failed to create " + name)
+    editing = unreal.MaterialEditingLibrary
+    editing.delete_all_material_expressions(material)
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
+    color.set_editor_property("constant", unreal.LinearColor(1.2, 0.15, 1.8, 1.0))
+    editing.connect_material_property(color, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    editing.recompile_material(material)
+    require(lib.save_loaded_asset(material, only_if_is_dirty=False), "Failed to save " + name)
+    return material
+
+
 def configure_projectile(ranged):
     projectile = require(lib.load_asset(BP_ROOT + "/BP_EnemyProjectile"), "Missing BP_EnemyProjectile")
     cdo = unreal.get_default_object(projectile.generated_class())
-    cdo.set_editor_property("trail_effect", require(lib.load_asset(VFX_ROOT + "/NS_VFX_Evil"), "Missing NS_VFX_Evil"))
+    # ProjectileVFX 팩 시스템은 머리 파티클이 스스로 속도·감속·충돌을 가져서 액터에 붙여도 따로 날아감.
+    # 그래서 비행 비주얼은 액터 컴포넌트인 발광 코어와 원뿔 꼬리로 만들고, 팩 이펙트는 제자리에서 터지는 폭발에만 씀
+    cdo.set_editor_property("trail_effect", None)
+    cdo.set_editor_property("trail_disabled_emitters", [])
+    cdo.set_editor_property("tail_material", ensure_tail_material())
+    cdo.set_editor_property("tail_length", 120.0)
     cdo.set_editor_property("impact_effect", require(lib.load_asset(VFX_ROOT + "/NS_VFX_Explosion"), "Missing NS_VFX_Explosion"))
-    # 팩 시스템은 발사(Emitter_*)·비행(Projectile_*)·폭발(Explosion_*) 이미터를 한 시스템에 담고 있음.
-    # 그대로 붙이면 비행 중에도 발사 연기와 폭발이 터져 방향이 읽히지 않아서, 단계에 맞는 이미터만 남김
-    cdo.set_editor_property("trail_disabled_emitters", [
-        "Emitter_Smoke", "Emitter_Particle", "Explosion_Distortion", "Explosion_Flare", "Explosion_Particle"])
+    # 폭발 시스템에도 비행용 이미터(Projectile_*)와 발사 고리가 들어 있어서 폭발(Explosion_*)만 남김
     cdo.set_editor_property("impact_disabled_emitters", [
         "Emitter_LeafRing", "Projectile_Smoke", "Projectile_VFX", "Projectile_Particle001"])
-    cdo.set_editor_property("trail_effect_scale", unreal.Vector(0.6, 0.6, 0.6))
     cdo.set_editor_property("impact_effect_scale", unreal.Vector(0.7, 0.7, 0.7))
     cdo.set_editor_property("core_material", ensure_core_material())
     unreal.BlueprintEditorLibrary.compile_blueprint(projectile)

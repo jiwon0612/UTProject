@@ -19,13 +19,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
 	float Speed = 1200.0f;
 
-	// 비행 중 따라붙는 이펙트임. 판정 위치가 보이도록 코어 구체(Visual)는 함께 표시함
+	// 비행 중 따라붙는 선택 이펙트임. 머리 파티클이 스스로 속도를 갖는 시스템(ProjectileVFX 팩 등)은
+	// 액터와 따로 날아가므로 쓰지 않음. 기본 비주얼은 아래 코어와 꼬리 메시임
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|VFX")
 	TObjectPtr<class UNiagaraSystem> TrailEffect;
 
 	// 코어 구체에 입히는 머티리얼임. 발광 머티리얼을 주면 이펙트가 작아도 판정 위치가 잘 보임
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|VFX")
 	TObjectPtr<class UMaterialInterface> CoreMaterial;
+
+	// 코어 뒤로 뻗는 원뿔 꼬리의 머티리얼임. 같은 액터의 컴포넌트라 투사체와 항상 함께 움직임
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|VFX")
+	TObjectPtr<class UMaterialInterface> TailMaterial;
+
+	// 꼬리 길이(cm)임. 0이면 꼬리를 숨김
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|VFX", meta = (ClampMin = "0.0"))
+	float TailLength = 120.0f;
 
 	// 이펙트 팩 기본 크기(약 2m)가 충돌 구체보다 훨씬 커서, 투사체 크기에 맞게 줄여 씀
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|VFX")
@@ -53,7 +62,13 @@ private:
 	TObjectPtr<class UStaticMeshComponent> Visual;
 
 	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<class UStaticMeshComponent> Tail;
+
+	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<class UProjectileMovementComponent> Movement;
+
+	/** 원뿔 밑면을 코어에 붙이고 꼭짓점이 진행 반대 방향(-X)을 향하도록 크기와 위치를 맞춤 */
+	void LayoutTail();
 
 	UFUNCTION()
 	void OnProjectileHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,

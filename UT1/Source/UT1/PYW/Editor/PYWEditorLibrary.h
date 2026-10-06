@@ -39,5 +39,4 @@ public:
 
 	/** Niagara 시스템에 들어 있는 이미터 핸들 이름을 돌려줌. 런타임에 특정 이미터를 끌 때 이름을 확인하는 용도임 */
 	UFUNCTION(BlueprintCallable, Category = "PYW|VFX", meta = (DevelopmentOnly))
-	static TArray<FString> GetNiagaraEmitterNames(class UNiagaraSystem* System);
-};
+	static TArray<FString> GetNiagaraEmitterNames(class UNiagaraSystem* System);};

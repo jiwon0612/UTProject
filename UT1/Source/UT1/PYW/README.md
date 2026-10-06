@@ -112,6 +112,11 @@ Content/PYW/
   `Anim_Combo_6_Br_2` (brute leap slam). Their pelvis travels far, while the
   C++ lunge already moves the actor, so `IN_PLACE` clips keep the pelvis X/Y at
   the first frame (vertical motion such as the jump is kept).
+- The retargeter copies source root motion onto the monster `Root` (Mannequin
+  `MM_Attack_01` moves it ~1.4m forward). Enemies move only through character
+  movement, so every clip gets its `Root` locked to the reference pose;
+  otherwise the mesh snaps back when an attack ends. The setup fails if any
+  clip still has root drift.
 - There is no unarmed cast clip, so ranged attacks use the pistol/rifle aim
   poses without a weapon (arms pushed forward). These are long loops, so
   `FEnemyAttackPattern::AnimationDuration` plays them only until just after the
@@ -126,11 +131,14 @@ Run order after building UT1Editor (both scripts are re-runnable):
 2. `Content/PYW/setup_monster_enemies.py` - BP meshes/animations, projectile VFX,
    test enemies in `Lvl_EnemyBTTest`, and removal of leftover redirectors.
 
-The ProjectileVFX systems bundle launch (`Emitter_*`), flight (`Projectile_*`) and
-impact (`Explosion_*`) emitters in one system. `BP_EnemyProjectile` disables the
-emitters that do not belong to each stage (`TrailDisabledEmitters`,
-`ImpactDisabledEmitters`), and shows a shadowless glowing core
-(`M_EnemyProjectileCore`) at the collision size so the hit position stays readable.
+The ProjectileVFX systems are self-contained projectiles: the head particle has
+its own velocity, drag and collision, so attaching them to the actor makes the
+effect fly apart from the real projectile. The flight visual is therefore made
+of actor components only: a shadowless glowing core (`M_EnemyProjectileCore`) at
+the collision size and an additive cone tail (`M_EnemyProjectileTail`,
+`TailLength`) pointing back along the path. `NS_VFX_Explosion` is still used for
+the impact, which plays in place; `ImpactDisabledEmitters` keeps only its
+`Explosion_*` emitters.
 
 Spawning actors from Python crashes under `-nullrhi`; run the second script
 with `-RenderOffscreen`.

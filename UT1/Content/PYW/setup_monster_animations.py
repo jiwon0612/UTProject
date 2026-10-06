@@ -160,13 +160,18 @@ def restore_root_scale(animation, mesh, in_place=False):
     cm 값으로 기록됨. 그대로 두면 스키닝에서 메시가 1/100로 줄어들기 때문에, Root 배율을 원래 값으로
     돌리고 직계 자식의 위치를 같은 비율로 나눔. 나머지 본은 원래 로컬 값이 유지되어 손대지 않음.
 
-    in_place이면 골반의 수평(X/Y) 위치를 첫 프레임 값으로 고정해 제자리 모션으로 만듦. 점프 같은
+    Root의 이동·회전은 기준 포즈로 고정함. 리타게터가 원본 루트 모션(공격 시 1m 넘게 전진 등)을 Root에
+    복사하는데, 적은 루트 모션 없이 캐릭터 무브먼트로만 움직여서 그대로 두면 공격이 끝날 때 메시가
+    원래 자리로 튀어 돌아감.
+
+    in_place이면 골반의 수평(X/Y) 위치도 첫 프레임 값으로 고정해 제자리 모션으로 만듦. 골반의
     수직(Z) 움직임은 남김.
     """
     component = unreal.new_object(unreal.SkeletalMeshComponent, name="RootScaleProbe")
     component.set_skeletal_mesh_asset(mesh)
     root = component.get_bone_name(0)
-    scale = component.get_ref_pose_transform(0).scale3d
+    root_ref = component.get_ref_pose_transform(0)
+    scale = root_ref.scale3d
     if abs(scale.x - 1.0) < 1e-3:
         return
     children = [component.get_bone_name(i) for i in range(component.get_num_bones())
@@ -180,6 +185,8 @@ def restore_root_scale(animation, mesh, in_place=False):
         rotations = [pose.rotation for pose in poses]
         if bone == root:
             scales = [unreal.Vector(scale.x, scale.y, scale.z) for _ in positions]
+            positions = [root_ref.translation for _ in positions]
+            rotations = [root_ref.rotation for _ in positions]
         else:
             scales = [unreal.Vector(1.0, 1.0, 1.0) for _ in positions]
             positions = [unreal.Vector(p.x / scale.x, p.y / scale.y, p.z / scale.z) for p in positions]
@@ -246,6 +253,14 @@ def bone_motion(animation, bone):
     return max(abs(first.angular_distance(p.rotation)) for p in poses) * 57.2958
 
 
+def root_drift(animation):
+    """Root 본이 클립 동안 움직인 최대 거리(cm)임. 루트 모션이 남아 있으면 0보다 큼."""
+    keys = animation.get_editor_property("data_model_interface").get_number_of_keys()
+    first = unreal.AnimationLibrary.get_bone_pose_for_frame(animation, "Root", 0, False).translation
+    return max((unreal.AnimationLibrary.get_bone_pose_for_frame(animation, "Root", f, False).translation - first).length()
+               for f in range(keys))
+
+
 def remove_legacy_assets():
     # 빈 IK_Monster로 만들어져 본 매핑이 없던 이전 결과물(대각선 이동, 깨진 SM_BS_Idle_Walk_Run 등)을 정리함
     for key, prefix, _ in PROFILES:
@@ -267,6 +282,8 @@ for key, prefix, mesh_path in PROFILES:
     retargeter = build_retargeter(key, manny_rig, rig)
     anims = retarget(prefix, folder, mesh, retargeter)
     build_locomotion(key, prefix, folder, mesh, anims)
+    drifting = {name: round(root_drift(anim), 2) for name, anim in anims.items() if root_drift(anim) > 0.01}
+    require(not drifting, "Root motion left in " + str(drifting))
     for name in ("MM_Attack_01", "MF_Unarmed_Jog_Fwd", "MM_Death_Front_01") + tuple(sorted(IN_PLACE)):
         unreal.log("PYW_MONSTER_ANIM_CHECK {} {} upper_arm_R={:.1f} thigh_L={:.1f}".format(
             key, name, bone_motion(anims[name], "upper_arm_R"), bone_motion(anims[name], "thigh_L")))
