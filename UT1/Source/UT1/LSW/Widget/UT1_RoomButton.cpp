@@ -1,8 +1,7 @@
 #include "LSW/Widget/UT1_RoomButton.h"
 
 #include "Components/Button.h"
-#include "Components/TextBlock.h"
-
+#include "Components/Image.h"
 
 void UUT1_RoomButton::NativeConstruct()
 {
@@ -10,139 +9,50 @@ void UUT1_RoomButton::NativeConstruct()
 
     if (RoomButton)
     {
-        RoomButton->OnClicked.Clear();
-
         RoomButton->OnClicked.AddDynamic(
             this,
             &UUT1_RoomButton::OnClicked
         );
     }
-
-    UpdateButtonState();
 }
 
-
-// =============================================================
-// Initialize
-// =============================================================
-
-void UUT1_RoomButton::InitializeRoom(
-    int32 InRoomID,
-    bool bInCanMove,
-    bool bInIsCurrent
+void UUT1_RoomButton::SetupRoomButton(int32 InRoomID, UTexture2D* InRoomTexture,
+    bool bCanMove, bool bIsCurrent
 )
 {
     RoomID = InRoomID;
 
-    bCanMove = bInCanMove;
-
-    bIsCurrent = bInIsCurrent;
-
-    if (RoomText)
+    if (RoomImage && InRoomTexture)
     {
+        RoomImage->SetBrushFromTexture(InRoomTexture);
+    }
+
+    if (RoomButton)
+    {
+        RoomButton->SetIsEnabled(bCanMove);
+
         if (bIsCurrent)
         {
-            RoomText->SetText(
-                FText::FromString(
-                    FString::Printf(
-                        TEXT("현재\nRoom %d"),
-                        RoomID
-                    )
-                )
+            RoomImage->SetColorAndOpacity(
+                FLinearColor::White
             );
         }
         else if (bCanMove)
         {
-            RoomText->SetText(
-                FText::FromString(
-                    FString::Printf(
-                        TEXT("이동\nRoom %d"),
-                        RoomID
-                    )
-                )
+            RoomImage->SetColorAndOpacity(
+                FLinearColor(0.8f, 0.8f, 0.8f, 1.0f)
             );
         }
         else
         {
-            RoomText->SetText(
-                FText::FromString(
-                    FString::Printf(
-                        TEXT("Room %d"),
-                        RoomID
-                    )
-                )
+            RoomImage->SetColorAndOpacity(
+                FLinearColor(0.4f, 0.4f, 0.4f, 1.0f)
             );
         }
     }
-
-    UpdateButtonState();
 }
-
-
-// =============================================================
-// Button State
-// =============================================================
-
-void UUT1_RoomButton::UpdateButtonState()
-{
-    if (!RoomButton)
-    {
-        return;
-    }
-
-    /*
-     * 현재 방
-     * → 클릭 불가
-     *
-     * 연결된 방
-     * → 클릭 가능
-     *
-     * 연결되지 않은 방
-     * → 클릭 불가
-     */
-
-    if (bIsCurrent)
-    {
-        RoomButton->SetIsEnabled(false);
-    }
-    else
-    {
-        RoomButton->SetIsEnabled(bCanMove);
-    }
-}
-
-
-// =============================================================
-// Click
-// =============================================================
 
 void UUT1_RoomButton::OnClicked()
 {
-    if (!bCanMove)
-    {
-        return;
-    }
-
-    if (bIsCurrent)
-    {
-        return;
-    }
-
-    if (RoomID == INDEX_NONE)
-    {
-        return;
-    }
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT(
-            "[RoomButton] Clicked Room %d"
-        ),
-        RoomID
-    );
-
-    OnRoomButtonClicked.Broadcast(
-        RoomID
-    );
+    OnRoomButtonClicked.Broadcast(RoomID);
 }

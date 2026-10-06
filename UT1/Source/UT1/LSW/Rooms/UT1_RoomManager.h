@@ -18,15 +18,12 @@ class UT1_API AUT1_RoomManager : public AActor
     GENERATED_BODY()
 
 public:
-
     AUT1_RoomManager();
 
 protected:
-
     virtual void BeginPlay() override;
 
 public:
-
     UFUNCTION(BlueprintCallable)
     void GenerateDungeon();
 
@@ -36,15 +33,19 @@ public:
     UFUNCTION(BlueprintCallable)
     void MoveToNextRoom();
 
-    // Base로 복귀
     UFUNCTION(BlueprintCallable)
     void MoveToBaseRoom();
 
-    // 현재 방이 마지막 방인지
     UFUNCTION(BlueprintPure)
     bool IsLastRoom() const;
 
     void SpawnCurrentRoom();
+
+    TSubclassOf<AUT1_RoomBase> GetRoomClass(FRoomNode& RoomNode);
+
+    const FRoomNode* GetCurrentRoomNode() const;
+
+    int32 GetConnectedRoomID(int32 Direction) const;
 
     void SpawnCurrentPortal();
 
@@ -54,23 +55,67 @@ public:
 
     void ClosePortalWidget();
 
-    const FRoomNode* GetCurrentRoomNode() const;
+    const TArray<FRoomNode>& GetRoomNodes() const
+    {
+        return RoomNodes;
+    }
 
-    int32 GetConnectedRoomID(
-        int32 Direction
-    ) const;
+    int32 GetCurrentRoomID() const
+    {
+        return CurrentRoomID;
+    }
 
+    const FRoomNode* FindRoomNode(int32 RoomID) const;
+
+    bool CanMoveToRoom(int32 RoomID) const;
+
+    UFUNCTION(BlueprintCallable)
+    void MarkCurrentRoomCleared();
+
+    FRoomNode* FindRoomNode(int32 RoomID);
+
+private:
+    ERoomType GetRandomRoomType(int32 RoomID, bool& bPreviousWasMidBoss) const;
+
+    int32 GetRandomRoomIndex(const TArray<TSubclassOf<AUT1_RoomBase>>& RoomClasses) const;
+
+    UFUNCTION()
+    void TestMoveToBaseRoom();
 
 public:
-
     UPROPERTY(EditAnywhere, Category = "Room")
     TSubclassOf<AUT1_RoomBase> BaseRoomClass;
 
     UPROPERTY(EditAnywhere, Category = "Room")
     TArray<TSubclassOf<AUT1_RoomBase>> NormalRoomClasses;
 
+    // Gimmick = 보상/특수 방 역할
+    UPROPERTY(EditAnywhere, Category = "Room")
+    TArray<TSubclassOf<AUT1_RoomBase>> GimmickRoomClasses;
+
+    UPROPERTY(EditAnywhere, Category = "Room")
+    TArray<TSubclassOf<AUT1_RoomBase>> MidBossRoomClasses;
+
+    UPROPERTY(EditAnywhere, Category = "Room")
+    TArray<TSubclassOf<AUT1_RoomBase>> BossRoomClasses;
+
     UPROPERTY(EditAnywhere, Category = "Dungeon")
     int32 DungeonRoomCount = 30;
+
+    UPROPERTY(EditAnywhere, Category = "Dungeon|Probability")
+    float NormalRoomWeight = 60.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Dungeon|Probability")
+    float GimmickRoomWeight = 25.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Dungeon|Probability")
+    float MidBossRoomWeight = 15.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Dungeon|MidBoss")
+    int32 MidBossMinRoom = 5;
+
+    UPROPERTY(EditAnywhere, Category = "Dungeon|MidBoss")
+    int32 MidBossMaxRoom = 25;
 
     UPROPERTY()
     TArray<FRoomNode> RoomNodes;
@@ -99,25 +144,4 @@ public:
 
     UPROPERTY()
     UUT1_PortalWidget* PortalWidget = nullptr;
-
-
-private:
-
-    FRoomNode* FindRoomNode(
-        int32 RoomID
-    );
-
-    const FRoomNode* FindRoomNode(
-        int32 RoomID
-    ) const;
-
-    TSubclassOf<AUT1_RoomBase> GetRoomClass(
-        FRoomNode& RoomNode
-    );
-
-
-private:
-
-    UFUNCTION()
-    void TestMoveToBaseRoom();
 };
