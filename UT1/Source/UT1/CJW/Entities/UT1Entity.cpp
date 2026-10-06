@@ -18,6 +18,13 @@ AUT1Entity::AUT1Entity()
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+
+		// 무기 트레이스에 걸리게 한다. 플레이어든 적이든 "맞을 수 있는 대상"은
+		// 전부 엔티티이므로 베이스에서 한 번만 켠다.
+		// Block 이 아닌 이유는 SweepMulti 가 블로킹 대상에서 멈춰, 겹쳐 선
+		// 둘 중 앞사람만 맞기 때문이다.
+		// 자기 무기에는 맞지 않는다. 트레이스가 소유자를 무시한다.
+		Capsule->SetCollisionResponseToChannel(UT1_TRACE_CHANNEL_WEAPON, ECR_Overlap);
 	}
 
 	if (USkeletalMeshComponent* MeshComp = GetMesh())

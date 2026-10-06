@@ -15,13 +15,6 @@ AUT1TestDummy::AUT1TestDummy()
 	// 기본 공격 10 데미지 기준 다섯 대면 죽는다. 사망까지 금방 확인된다.
 	MaxHealth = 50.0f;
 
-	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
-	{
-		// 이 한 줄이 무기 트레이스에 걸리게 해 준다.
-		// 호출 시점에 프로필이 Custom 으로 전환되고 나머지 응답은 유지된다.
-		Capsule->SetCollisionResponseToChannel(UT1_TRACE_CHANNEL_WEAPON, ECR_Overlap);
-	}
-
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(GetCapsuleComponent());
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
