@@ -106,6 +106,11 @@ void AUT1Player::BeginPlay()
 
 	// Apply this after Blueprint component defaults are loaded so they cannot
 	// silently replace the constructor's post-process blendable.
+	if (!OccludedCharacterOutlineMaterial)
+	{
+		OccludedCharacterOutlineMaterial = LoadObject<UMaterialInterface>(nullptr,
+			TEXT("/Game/LSW/Materials/M_UT1_OccludedCharacterOutline.M_UT1_OccludedCharacterOutline"));
+	}
 	if (Camera && OccludedCharacterOutlineMaterial)
 	{
 		Camera->PostProcessSettings.AddBlendable(OccludedCharacterOutlineMaterial, 1.0f);

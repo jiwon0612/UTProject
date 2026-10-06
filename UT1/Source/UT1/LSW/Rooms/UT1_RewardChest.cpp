@@ -7,7 +7,6 @@
 #include "LSW/Rooms/UT1_RoomManager.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
 #include "CollisionQueryParams.h"
 #include "Engine/EngineTypes.h"
@@ -43,14 +42,6 @@ AUT1_RewardChest::AUT1_RewardChest()
 	{
 		ChestFadeMaterial = ChestFadeAsset.Object;
 	}
-
-	PromptText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("PromptText"));
-	PromptText->SetupAttachment(InteractRange);
-	PromptText->SetText(NSLOCTEXT("UT1RewardChest", "Prompt", "E: 상자 열기"));
-	PromptText->SetHorizontalAlignment(EHTA_Center);
-	PromptText->SetRelativeLocation(FVector(0.0f, 0.0f, 100.0f));
-	PromptText->SetRelativeRotation(FRotator(50.0f, 225.0f, 0.0f));
-	PromptText->SetHiddenInGame(true);
 
 	PickupClass = AUT1LootPickup::StaticClass();
 }
@@ -173,7 +164,6 @@ void AUT1_RewardChest::Interact_Implementation(AUT1Player* Interactor)
 	}
 
 	bOpened = true;
-	PromptText->SetHiddenInGame(true);
 	SetActorTickEnabled(true);
 	StartChestFade();
 
@@ -271,20 +261,3 @@ void AUT1_RewardChest::UpdateChestFade(float DeltaSeconds)
 	}
 }
 
-void AUT1_RewardChest::NotifyActorBeginOverlap(AActor* OtherActor)
-{
-	Super::NotifyActorBeginOverlap(OtherActor);
-	if (!bOpened && Cast<AUT1Player>(OtherActor) != nullptr)
-	{
-		PromptText->SetHiddenInGame(false);
-	}
-}
-
-void AUT1_RewardChest::NotifyActorEndOverlap(AActor* OtherActor)
-{
-	Super::NotifyActorEndOverlap(OtherActor);
-	if (Cast<AUT1Player>(OtherActor) != nullptr)
-	{
-		PromptText->SetHiddenInGame(true);
-	}
-}

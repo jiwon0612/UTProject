@@ -105,6 +105,12 @@ void AEnemyCharacter::SetEnemyLevel(int32 NewLevel)
 	ApplyLevelScaling();
 }
 
+void AEnemyCharacter::SetRoomDifficultyMultiplier(float NewMultiplier)
+{
+	RoomDifficultyMultiplier = FMath::Clamp(NewMultiplier, 0.1f, 1.0f);
+	ApplyLevelScaling();
+}
+
 void AEnemyCharacter::ApplyLevelScaling()
 {
 	EnemyLevel = FMath::Max(1, EnemyLevel);

@@ -97,6 +97,7 @@ void AUT1_NormalRoom::SpawnEnemies()
         if (Enemy)
         {
             Enemy->SetEnemyLevel(EnemyLevel);
+            Enemy->SetRoomDifficultyMultiplier(EnemyDifficultyMultiplier);
             SpawnedEnemies.Add(Enemy);
             Enemy->OnDied.AddDynamic(this, &AUT1_NormalRoom::HandleEnemyDied);
         }
