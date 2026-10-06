@@ -3,7 +3,7 @@
 
 #include "LSW/Rooms/UT1_NormalRoom.h"
 #include "Engine/World.h"
-#include "PYW/EnemyCharacter.h"
+#include "PYW/Entities/EnemyCharacter.h"
 
 AUT1_NormalRoom::AUT1_NormalRoom()
 {
@@ -79,6 +79,7 @@ void AUT1_NormalRoom::SpawnEnemies()
 
         if (Enemy)
         {
+            Enemy->SetEnemyLevel(EnemyLevel);
             SpawnedEnemies.Add(Enemy);
         }
     }

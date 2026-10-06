@@ -2,7 +2,7 @@
 
 
 #include "LSW/Rooms/UT1_MidBossRoom.h"
-#include "PYW/EnemyCharacter.h"
+#include "PYW/Entities/EnemyCharacter.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 
@@ -54,4 +54,9 @@ void AUT1_MidBossRoom::SpawnMidBoss()
             MidBossSpawnPoint->GetComponentRotation(),
             SpawnParams
         );
+
+    if (SpawnedMidBoss)
+    {
+        SpawnedMidBoss->SetEnemyLevel(EnemyLevel);
+    }
 }
