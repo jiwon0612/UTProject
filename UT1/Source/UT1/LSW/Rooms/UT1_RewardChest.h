@@ -9,7 +9,6 @@ class AUT1Player;
 class AUT1LootPickup;
 class USphereComponent;
 class UStaticMeshComponent;
-class UTextRenderComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class UUT1MaterialData;
@@ -54,8 +53,6 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
-	virtual void NotifyActorBeginOverlap(AActor* OtherActor) override;
-	virtual void NotifyActorEndOverlap(AActor* OtherActor) override;
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reward")
@@ -75,9 +72,6 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chest")
 	TObjectPtr<UStaticMeshComponent> BodyMesh;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chest")
-	TObjectPtr<UTextRenderComponent> PromptText;
 
 private:
 	void StartChestFade();

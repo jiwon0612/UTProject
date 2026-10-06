@@ -185,6 +185,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Level", meta = (ClampMin = "1", ExposeOnSpawn = "true"))
 	int32 EnemyLevel = 1;
 
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|Level", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	float RoomDifficultyMultiplier = 1.0f;
+
 	// 레벨 1 오를 때마다 기본 체력에 더하는 비율임 (0.2 = +20%). 경직 내성도 같은 비율로 올려 경직 빈도를 유지함
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Level", meta = (ClampMin = "0.0"))
 	float HealthPerLevel = 0.2f;
@@ -197,11 +200,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Level")
 	void SetEnemyLevel(int32 NewLevel);
 
-	UFUNCTION(BlueprintPure, Category = "Enemy|Level")
-	float GetLevelHealthMultiplier() const { return 1.0f + HealthPerLevel * (EnemyLevel - 1); }
+	/** Applies the room's revisit difficulty to enemy health and attack damage. */
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Level")
+	void SetRoomDifficultyMultiplier(float NewMultiplier);
 
 	UFUNCTION(BlueprintPure, Category = "Enemy|Level")
-	float GetLevelDamageMultiplier() const { return 1.0f + DamagePerLevel * (EnemyLevel - 1); }
+	float GetLevelHealthMultiplier() const { return RoomDifficultyMultiplier * (1.0f + HealthPerLevel * (EnemyLevel - 1)); }
+
+	UFUNCTION(BlueprintPure, Category = "Enemy|Level")
+	float GetLevelDamageMultiplier() const { return RoomDifficultyMultiplier * (1.0f + DamagePerLevel * (EnemyLevel - 1)); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Animation")
 	TObjectPtr<class UBlendSpace> LocomotionAnimation;

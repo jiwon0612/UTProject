@@ -30,6 +30,18 @@ void AUT1_MidBossRoom::SetupRoom()
     Super::SetupRoom();
 
     ResetRoom();
+
+    // 이미 클리어한 중간보스방에 돌아왔을 땐 보스를 다시 소환하지 않는다.
+    if (AUT1_RoomManager* RoomManager = Cast<AUT1_RoomManager>(
+        UGameplayStatics::GetActorOfClass(GetWorld(), AUT1_RoomManager::StaticClass())))
+    {
+        const FRoomNode* CurrentNode = RoomManager->GetCurrentRoomNode();
+        if (CurrentNode && CurrentNode->bIsCleared)
+        {
+            return;
+        }
+    }
+
     SpawnMidBoss();
 }
 
@@ -44,7 +56,10 @@ void AUT1_MidBossRoom::ResetRoom()
 void AUT1_MidBossRoom::SpawnMidBoss()
 {
     if (!GetWorld() || !MidBossClass || !MidBossSpawnPoint)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[MidBossRoom] Configure MidBossClass on the room Blueprint."));
         return;
+    }
 
     FActorSpawnParameters SpawnParams;
     SpawnParams.SpawnCollisionHandlingOverride =

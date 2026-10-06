@@ -9,6 +9,7 @@ class AUT1_Portal;
 class UUserWidget;
 class UUT1_PortalWidget;
 class UUT1_RoomTransitionWidget;
+class UUT1_GameClearWidget;
 
 struct FRoomNode;
 enum class ERoomType : uint8;
@@ -72,6 +73,8 @@ public:
 
     UFUNCTION(BlueprintCallable)
     void MarkCurrentRoomCleared();
+
+    void ShowGameClear();
 
     FRoomNode* FindRoomNode(int32 RoomID);
 
@@ -160,6 +163,11 @@ public:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUT1_RoomTransitionWidget> RoomTransitionWidget;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UUT1_GameClearWidget> GameClearWidget;
+
+    bool bMidBossClearedThisRun = false;
 
 	int32 PendingRoomID = INDEX_NONE;
 	bool bRoomTransitionInProgress = false;
