@@ -33,12 +33,21 @@ AUT1Entity::AUT1Entity()
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
 		MeshComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		// The camera post-process uses Custom Depth to find characters hidden by geometry.
+		MeshComp->SetRenderCustomDepth(true);
 	}
 }
 
 void AUT1Entity::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Blueprint defaults can override component constructor settings, so enforce
+	// Custom Depth at runtime for the occluded-character post-process.
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetRenderCustomDepth(true);
+	}
 
 	CurrentHealth = MaxHealth;
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);

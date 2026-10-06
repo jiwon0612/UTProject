@@ -7,6 +7,7 @@
 #include "UT1_NormalRoom.generated.h"
 
 class AEnemyCharacter;
+class AUT1Entity;
 class USceneComponent;
 
 UCLASS()
@@ -19,6 +20,9 @@ public:
 
 private:
 	void SpawnEnemies();
+
+	UFUNCTION()
+	void HandleEnemyDied(AUT1Entity* Entity);
 
 public:
 	virtual void SetupRoom() override;

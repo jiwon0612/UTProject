@@ -13,6 +13,7 @@ class AUT1Weapon;
 class UUT1RunInventoryComponent;
 class UUT1MaterialData;
 class UUT1DodgeComponent;
+class UMaterialInterface;
 
 // 지금 E 를 누르면 실행될 대상이 바뀌었다. 대상이 없으면 nullptr.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FUT1FocusedInteractableChanged, AActor*, NewTarget);
@@ -140,6 +141,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<class UCameraComponent> Camera;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Occlusion Outline")
+	TObjectPtr<UMaterialInterface> OccludedCharacterOutlineMaterial;
 
 public:
 	void Input_Move(const FInputActionValue& InputValue);

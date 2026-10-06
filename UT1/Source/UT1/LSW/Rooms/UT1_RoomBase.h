@@ -11,11 +11,11 @@
 UENUM(BlueprintType)
 enum class ERoomType : uint8
 {
-    Base,
-    Normal,
-    Gimmick,
-    MidBoss,
-    Boss
+    Base = 0,
+    Normal = 1,
+    MidBoss = 3,
+    Boss = 4,
+    Reward = 5
 };
 
 USTRUCT(BlueprintType)
