@@ -20,7 +20,7 @@ AMeleeEnemyCharacter::AMeleeEnemyCharacter()
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> Attack03(
 		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03"));
-	// 낮게 몸을 뻗어 찌르는 검술 모션임. 이동은 Lunge가 맡으므로 setup에서 골반 수평 이동을 지운 인플레이스로 씀
+	// 낮게 몸을 뻗어 찌르는 검술 모션임. 이동은 Lunge가 맡으므로 골반 수평 이동을 지운 인플레이스 클립을 씀
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> LungeThrust(
 		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_2/Anim_Combo_2_Br_4"));
 	AttackAnimation = Attack01.Object;

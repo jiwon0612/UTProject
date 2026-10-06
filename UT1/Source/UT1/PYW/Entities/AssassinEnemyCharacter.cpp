@@ -20,7 +20,7 @@ AAssassinEnemyCharacter::AAssassinEnemyCharacter()
 	StrikeHalfAngle = 60.0f;
 	AttackCooldownVariance = 0.3f;
 
-	// 패턴마다 다른 짧은 검술 모션을 씀 (CJW hackNSlash, 읽기 전용). setup에서 인플레이스로 리타게팅함
+	// 패턴마다 다른 짧은 검술 모션을 씀 (CJW hackNSlash, 읽기 전용). 인플레이스로 리타게팅한 클립을 씀
 	// QuickThrust 0.62s(0.2~0.3s에 팔을 곧게 뻗음), SpinCuts 0.82s(연달아 휘두름), LowLunge 0.75s(0.45s에 가장 멀리 파고듦)
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> QuickThrust(
 		TEXT("/Game/CJW/Assets/hackNSlash/Animations/Combo_10/Anim_Combo_10_Br_1"));

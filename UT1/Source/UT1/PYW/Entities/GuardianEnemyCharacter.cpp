@@ -22,7 +22,7 @@ AGuardianEnemyCharacter::AGuardianEnemyCharacter()
 	// 천천히 돌아서므로 옆이나 뒤로 돌아 들어갈 틈이 생김
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 160.0f, 0.0f);
 
-	// 패턴마다 다른 검술 모션임 (CJW hackNSlash, 읽기 전용). setup에서 인플레이스로 리타게팅함
+	// 패턴마다 다른 검술 모션임 (CJW hackNSlash, 읽기 전용). 인플레이스로 리타게팅한 클립을 씀
 	// ShieldBash 0.70s(0.49s에 가장 멀리 뻗음), DoubleBash는 회전이 큰 검술 대신 단순한 2연타 MM_Attack_02(1.00s),
 	// HeavyChop 1.17s(0.41s에 내려침), ChargeThrust 1.15s(크게 당겼다가 0.98s에 찌름)
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> ShieldBashAnim(

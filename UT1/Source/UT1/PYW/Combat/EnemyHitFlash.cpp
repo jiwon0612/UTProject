@@ -10,7 +10,7 @@
 
 namespace
 {
-	// setup_monster_enemies.py가 만드는 가산 머티리얼임 (Color, Intensity 파라미터)
+	// PYW 가산 머티리얼임 (Color 파라미터로 색과 밝기를 바꿈)
 	const TCHAR* FlashMaterialPath = TEXT("/Game/PYW/Materials/M_EnemyHitFlash.M_EnemyHitFlash");
 }
 

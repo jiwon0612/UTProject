@@ -7,7 +7,7 @@ folders CJW has no counterpart for keep their own name:
 PYW/
 ├── AI/        Enemy Behavior Tree controller and custom BT nodes
 ├── Combat/    Combat helpers shared by enemies and projectiles (EnemyEffects)
-├── Editor/    Editor-only helpers (UPYWEditorLibrary) for the PYW Python scripts
+├── Editor/    Editor-only helpers (UPYWEditorLibrary) used by the former PYW setup scripts
 ├── Entities/  Shared enemy character plus melee/ranged/brute/assassin/bomber/guardian/artillery archetypes
 └── Weapons/   Enemy projectile
 ```
@@ -117,10 +117,12 @@ the normal/mid-boss rooms call `SetEnemyLevel` on what they spawn.
 
 `AEnemyCharacter` owns CJW's `UUT1LootDropComponent` (`LootDrop`), so every enemy
 drops loot through the shared `OnDied` rule without enemy-specific code. The
-per-enemy tables live in `setup_monster_enemies.py` (`SMALL_LOOT`, `LARGE_LOOT`):
-scrap/wire/cloth with chance and count ranges, and a 13% chance per weapon
-blueprint. Only one blueprint drops at a time and already unlocked blueprints
-(the starting katana) are skipped.
+per-enemy tables are set on each enemy Blueprint's `LootDrop`: scrap/wire/cloth
+with chance and count ranges, and the weapon blueprints. Weapon data doubles as
+the crafting recipe, so a weapon has to be unlocked by picking up its blueprint
+before the workbench can make it. Each of the five `MeleeWeapon/DA_Weapon_*`
+blueprints (all but the starting katana) drops at 3%, about 14% per kill in total.
+Only one blueprint drops at a time and already unlocked blueprints are skipped.
 
 # Monster visuals
 
@@ -180,12 +182,13 @@ Content/PYW/
 - Hit reactions are retargeted rifle HitReact clips, so the arms briefly take a
   rifle-holding shape. Replace them when unarmed hit clips are available.
 
-Run order after building UT1Editor (both scripts are re-runnable):
-
-1. `Content/PYW/setup_monster_animations.py` - IK Rigs, Retargeters, retargeted
-   clips and locomotion BlendSpaces.
-2. `Content/PYW/setup_monster_enemies.py` - BP meshes/animations, projectile VFX,
-   test enemies in `Lvl_EnemyBTTest`, and removal of leftover redirectors.
+These assets were generated once by editor Python setup scripts
+(`setup_monster_animations.py`, `setup_monster_enemies.py`), which were removed
+after use and can be restored from git history if the pipeline has to be rerun.
+The generated assets (IK Rigs, Retargeters, `SM_`/`LM_` clips, BlendSpaces, enemy
+Blueprints, materials) are now edited directly in the editor. If C++ attack
+patterns change, copy them into the enemy Blueprints by hand (the scripts used to
+do this and remap each clip to its retargeted `SM_`/`LM_` version).
 
 The ProjectileVFX systems are self-contained projectiles: the head particle has
 its own velocity, drag and collision, so attaching them to the actor makes the
@@ -203,8 +206,8 @@ of actor components only, so it can never drift from the hit sphere:
   `InnerTailLengthScale`/`InnerTailWidthScale`).
 - Glow: shadowless point light that tints the floor under the projectile.
 
-The materials are generated as node graphs by `setup_monster_enemies.py`
-(`MaterialGraph`), because the pack materials read Niagara particle colour and
+These are PYW's own simple materials (originally generated as node graphs by the
+removed setup script), because the pack materials read Niagara particle colour and
 render black on static meshes.
 
 Hit feedback is `Combat/EnemyHitFlash` (`AEnemyHitFlash::Spawn`): a soft glowing
