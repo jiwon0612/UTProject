@@ -9,7 +9,7 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	GetCapsuleComponent()->SetRelativeScale3D(FVector(0.95f));
 	CombatType = EEnemyCombatType::Ranged;
 	CombatMovement = EEnemyCombatMovement::Kite;
-	MaxHealth = 70.0f;
+	MaxHealth = 35.0f;
 	AttackRange = 1300.0f;
 	RetreatDistance = 450.0f;
 	DetectionRange = 1800.0f;

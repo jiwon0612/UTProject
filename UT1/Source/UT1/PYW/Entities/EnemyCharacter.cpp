@@ -54,6 +54,26 @@ AEnemyCharacter::AEnemyCharacter()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	// 여러 적이 한 대상을 쫓을 때 캡슐끼리 밀치며 뭉치지 않도록 서로 비켜 가게 함 (RVO 회피)
+	GetCharacterMovement()->bUseRVOAvoidance = true;
+	GetCharacterMovement()->AvoidanceConsiderationRadius = 250.0f;
+	GetCharacterMovement()->AvoidanceWeight = 0.5f;
+}
+
+float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
+	AController* EventInstigator, AActor* DamageCauser)
+{
+	// 적끼리는 서로 피해를 주지 않음. 범위 공격·투사체가 다른 적을 지나가도 무시함 (자기 자신에게 주는 피해는 허용)
+	const AEnemyCharacter* Attacker = Cast<AEnemyCharacter>(DamageCauser);
+	if (!Attacker && IsValid(DamageCauser)) Attacker = Cast<AEnemyCharacter>(DamageCauser->GetInstigator());
+	if (!Attacker && EventInstigator) Attacker = Cast<AEnemyCharacter>(EventInstigator->GetPawn());
+	if (Attacker && Attacker != this)
+	{
+		UE_LOG(LogTemp, Display, TEXT("ENEMY_FRIENDLY_FIRE_IGNORED Actor=%s Attacker=%s Damage=%.1f"),
+			*GetName(), *Attacker->GetName(), DamageAmount);
+		return 0.0f;
+	}
+	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 }
 
 void AEnemyCharacter::PostLoad()
@@ -129,8 +149,8 @@ void AEnemyCharacter::ApplyLevelScaling()
 void AEnemyCharacter::HandleDamaged(float ActualDamage, AActor* DamageCauser)
 {
 	Super::HandleDamaged(ActualDamage, DamageCauser);
-	UE_LOG(LogTemp, Display, TEXT("ENEMY_DAMAGE Actor=%s Damage=%.1f Health=%.1f/%.1f"),
-		*GetName(), ActualDamage, CurrentHealth, MaxHealth);
+	UE_LOG(LogTemp, Display, TEXT("ENEMY_DAMAGE Actor=%s Damage=%.1f Health=%.1f/%.1f Causer=%s"),
+		*GetName(), ActualDamage, CurrentHealth, MaxHealth, *GetNameSafe(DamageCauser));
 
 	// 감지 범위 밖이나 시야 밖에서 맞아도 공격자를 바로 추적함
 	APawn* SourcePawn = Cast<APawn>(DamageCauser);
@@ -698,8 +718,8 @@ bool AEnemyCharacter::PerformAttack(AActor* Target)
 	const double Now = GetWorld()->GetTimeSeconds();
 	ActivePattern = AttackPatterns[PatternIndex];
 	if (!ActivePattern.Animation) ActivePattern.Animation = AttackAnimation;
-	// 근접·범위·투사체 모두 ActivePattern.Damage를 쓰므로 여기서 한 번만 레벨 배율을 곱함
-	ActivePattern.Damage *= GetLevelDamageMultiplier();
+	// 근접·범위·투사체 모두 ActivePattern.Damage를 쓰므로 여기서 한 번만 레벨·보스 배율을 곱함
+	ActivePattern.Damage *= GetLevelDamageMultiplier() * AttackDamageMultiplier;
 	ActiveAttackName = ActivePattern.Name.ToString();
 	LastPatternIndex = PatternIndex;
 	if (PatternReadyTimes.Num() != AttackPatterns.Num()) PatternReadyTimes.SetNumZeroed(AttackPatterns.Num());

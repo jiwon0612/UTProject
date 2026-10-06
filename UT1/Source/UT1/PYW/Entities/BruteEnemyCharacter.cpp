@@ -9,7 +9,7 @@ ABruteEnemyCharacter::ABruteEnemyCharacter()
 	// 루트 캡슐 배율은 스폰 트랜스폼과 곱해져 유지되므로 메시와 판정 크기가 함께 커짐
 	GetCapsuleComponent()->SetRelativeScale3D(FVector(1.3f));
 	CombatMovement = EEnemyCombatMovement::HoldGround;
-	MaxHealth = 320.0f;
+	MaxHealth = 160.0f;
 	AttackRange = 140.0f;
 	WalkSpeed = 140.0f;
 	ChaseSpeed = 290.0f;
