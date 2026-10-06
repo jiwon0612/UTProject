@@ -4,7 +4,7 @@
 #include "LSW/Rooms/UT1_MidBossRoom.h"
 #include "LSW/Rooms/UT1_RoomManager.h"
 #include "CJW/Entities/UT1Entity.h"
-#include "PYW/EnemyCharacter.h"
+#include "PYW/Entities/EnemyCharacter.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"

@@ -6,7 +6,7 @@
 #include "CJW/Entities/UT1Entity.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
-#include "PYW/EnemyCharacter.h"
+#include "PYW/Entities/EnemyCharacter.h"
 
 AUT1_NormalRoom::AUT1_NormalRoom()
 {
