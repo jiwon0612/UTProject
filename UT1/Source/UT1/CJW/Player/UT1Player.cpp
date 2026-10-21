@@ -343,6 +343,8 @@ void AUT1Player::HandleDeath(AActor* Killer)
 
 void AUT1Player::StartWeaponTrace()
 {
+	HitActorsThisSwing.Reset();
+
 	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
 	{
 		if (IsValid(Weapon))
@@ -360,6 +362,7 @@ void AUT1Player::TickWeaponTrace()
 	AttackInfo.Damage = GetCurrentAttackDamage();
 	AttackInfo.CritChance = Stats.CritChance;
 	AttackInfo.CritDamageMultiplier = Stats.CritDamageMultiplier;
+	AttackInfo.SharedHitActors = &HitActorsThisSwing;
 
 	for (TObjectPtr<AUT1Weapon>& Weapon : EquippedWeapons)
 	{
@@ -379,6 +382,8 @@ void AUT1Player::StopWeaponTrace()
 			Weapon->EndAttackTrace();
 		}
 	}
+
+	HitActorsThisSwing.Reset();
 }
 
 float AUT1Player::GetCurrentAttackDamage() const

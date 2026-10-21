@@ -123,6 +123,10 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 		QueryParams.AddIgnoredActor(MyOwner);   // 자기 자신을 베지 않도록
 	}
 
+	TSet<TObjectPtr<AActor>>& HitActors = AttackInfo.SharedHitActors != nullptr
+		? *AttackInfo.SharedHitActors
+		: HitActorsThisSwing;
+
 	for (int32 i = 0; i < Current.Num(); ++i)
 	{
 		TArray<FHitResult> Hits;
@@ -138,11 +142,11 @@ void AUT1Weapon::TickAttackTrace(const FUT1AttackInfo& AttackInfo)
 		for (const FHitResult& Hit : Hits)
 		{
 			AActor* HitActor = Hit.GetActor();
-			if (HitActor == nullptr || HitActorsThisSwing.Contains(HitActor))
+			if (HitActor == nullptr || HitActors.Contains(HitActor))
 			{
 				continue;   // 한 스윙에 한 번만
 			}
-			HitActorsThisSwing.Add(HitActor);
+			HitActors.Add(HitActor);
 
 			// 치명타는 맞힌 대상마다 따로 굴린다.
 			const bool bCritical = FMath::FRand() < AttackInfo.CritChance;

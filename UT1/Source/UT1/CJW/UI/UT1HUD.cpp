@@ -152,5 +152,14 @@ void AUT1HUD::RestartRun()
 	// PIE 에서도 맞는 이름이 나오도록 "UEDPIE_0_" 같은 접두사는 떼고 받는다.
 	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
 	UE_LOG(LogUT1, Log, TEXT("[HUD] 다시 시작: %s 레벨을 다시 엽니다."), *LevelName);
+
+	// 레벨을 떠나기 전에 반드시 게임 입력으로 되돌린다.
+	// 사망 화면의 UIOnly 모드는 GameViewportClient 에 "입력 무시"를 걸어 두는데,
+	// 뷰포트는 월드와 달리 레벨이 바뀌어도 살아남아서 새 레벨에서도 아무 조작이 안 된다.
+	if (DeathScreen != nullptr)
+	{
+		DeathScreen->Hide();
+	}
+
 	UGameplayStatics::OpenLevel(this, FName(*LevelName));
 }

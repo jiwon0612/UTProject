@@ -110,6 +110,11 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<AUT1Weapon>> EquippedWeapons;
 
+	// 판정 구간 하나 동안 맞힌 대상. 무기 액터가 아니라 휘두르는 쪽이 들고 있어야
+	// 쌍수 무기도 "구간당 대상 1회" 규칙을 지킨다. 다단 히트는 노티파이를 여러 개 둔다.
+	UPROPERTY()
+	TSet<TObjectPtr<AActor>> HitActorsThisSwing;
+
 	void ClearEquippedWeapons();
 
 	// 인벤토리가 장착 변경을 알리면 실제 무기 액터를 교체한다.

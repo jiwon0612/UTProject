@@ -34,7 +34,8 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	MagicBolt.Animation = CastAsset.Object;
 	MagicBolt.AnimationStartTime = CastStart;
 	MagicBolt.Damage = 4.2f;
-	MagicBolt.Cooldown = 0.6f;
+	// 원거리 적 여럿이 겹치면 탄막이 끊기지 않아 공격 간격을 늘림 (데미지는 유지)
+	MagicBolt.Cooldown = 1.4f;
 	MagicBolt.ImpactDelay = CastRelease;
 	MagicBolt.Weight = 3.0f;
 
@@ -45,7 +46,7 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	TripleBurst.AnimationStartTime = CastStart;
 	TripleBurst.AnimationDuration = 1.0f;
 	TripleBurst.Damage = 2.1f;
-	TripleBurst.Cooldown = 0.8f;
+	TripleBurst.Cooldown = 1.6f;
 	TripleBurst.ImpactDelay = CastRelease;
 	TripleBurst.HitCount = 3;
 	TripleBurst.HitInterval = 0.18f;
@@ -58,11 +59,11 @@ ARangedEnemyCharacter::ARangedEnemyCharacter()
 	SpreadVolley.AnimationStartTime = CastStart;
 	SpreadVolley.AnimationDuration = 0.8f;
 	SpreadVolley.Damage = 1.8f;
-	SpreadVolley.Cooldown = 1.0f;
+	SpreadVolley.Cooldown = 1.8f;
 	SpreadVolley.ImpactDelay = CastRelease + 0.05f;
 	SpreadVolley.ProjectilesPerHit = 5;
 	SpreadVolley.SpreadAngle = 24.0f;
-	SpreadVolley.PatternCooldown = 3.0f;
+	SpreadVolley.PatternCooldown = 5.0f;
 	SpreadVolley.Weight = 1.5f;
 
 	// 붙어 오는 대상을 밀쳐 내고 다시 거리를 벌리기 위한 근거리 폭발임. 모은 손을 밀어 내는 순간 터짐

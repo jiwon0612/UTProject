@@ -40,7 +40,8 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	Shell.Name = TEXT("ArtilleryShell");
 	Shell.Animation = LobThrowAnim.Object;
 	Shell.Damage = 6.3f;
-	Shell.Cooldown = 1.2f;
+	// 포격 빈도가 높아 회피 후 접근할 틈이 없어서 공격 간격을 늘림 (데미지는 유지)
+	Shell.Cooldown = 2.0f;
 	Shell.ImpactDelay = 1.6f;
 	// 팔을 내지르는 순간(0.75s) 던져 0.85s 동안 포물선으로 날아감
 	Shell.LobLaunchTime = 0.75f;
@@ -57,7 +58,7 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	Barrage.AnimationStartTime = 0.70f;
 	Barrage.AnimationDuration = 1.5f;
 	Barrage.Damage = 4.2f;
-	Barrage.Cooldown = 1.5f;
+	Barrage.Cooldown = 2.5f;
 	Barrage.ImpactDelay = 1.4f;
 	// 조준 자세에서 0.3s 간격으로 연달아 쏘아 올림. 각 포탄은 1.0s 날아감
 	Barrage.LobLaunchTime = 0.4f;
@@ -67,7 +68,7 @@ AArtilleryEnemyCharacter::AArtilleryEnemyCharacter()
 	Barrage.AreaRadius = 160.0f;
 	Barrage.bAreaAtTarget = true;
 	Barrage.AreaScatter = 320.0f;
-	Barrage.PatternCooldown = 7.0f;
+	Barrage.PatternCooldown = 9.0f;
 	Barrage.Weight = 2.0f;
 
 	// 붙어 온 대상을 밀어내고 다시 포격 거리를 벌리기 위한 근거리 폭발임

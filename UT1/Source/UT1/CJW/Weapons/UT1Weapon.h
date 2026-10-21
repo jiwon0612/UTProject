@@ -18,6 +18,11 @@ struct FUT1AttackInfo
 	float Damage = 0.0f;
 	float CritChance = 0.0f;
 	float CritDamageMultiplier = 1.5f;
+
+	// 이번 판정 구간에 이미 맞힌 대상. 휘두르는 쪽(플레이어)이 갖고 넘겨준다.
+	// 쌍수 무기는 무기 액터가 둘이라, 목록을 무기마다 두면 양손이 같은 대상을 두 번 때린다.
+	// 비어 있으면(nullptr) 무기가 자기 목록을 쓴다.
+	TSet<TObjectPtr<AActor>>* SharedHitActors = nullptr;
 };
 
 /**

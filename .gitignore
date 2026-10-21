@@ -1,0 +1,5 @@
+# Packaged build output (regenerate via Package Project; distribute via GitHub Releases)
+/Build/
+
+# Archives are too large for GitHub (100MB file limit)
+*.zip
